@@ -2,8 +2,9 @@
 No@
 June 2025
 '''
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import Canvas, filedialog, messagebox
 from PIL import Image, ImageTk
 import numpy as np
 from skimage.measure import find_contours
@@ -83,7 +84,7 @@ def PredictionLoader(iterator):
 
     return key, pred, landmask, boundmask
 
-class Visualizer(tk.Tk):
+class Visualizer(ctk.CTk):
 
     def __init__(self):
 
@@ -93,6 +94,10 @@ class Visualizer(tk.Tk):
 
         # ------- Visualizer settings
         self.title("Visualizer")
+
+        ctk.set_appearance_mode("System")  # or "Dark", "Light"
+        ctk.set_default_color_theme("blue")  # or another theme
+
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         # Use 75% of screen size, for example
@@ -115,7 +120,7 @@ class Visualizer(tk.Tk):
         self.select_start = None
 
         #%% Canvas
-        self.canvas = tk.Canvas(self, bg='black')
+        self.canvas = Canvas(self, bg='black')
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
         self.canvas.bind("<MouseWheel>", self._on_mousewheel)  # Windows
@@ -130,60 +135,73 @@ class Visualizer(tk.Tk):
         self.canvas.bind("<ButtonRelease-1>", self._on_left_release)
 
         # Create a bottom container to hold control frames
-        self.bottom_container = tk.Frame(self)
+        self.bottom_container = ctk.CTkFrame(self)
         self.bottom_container.pack(side=tk.BOTTOM, fill=tk.X)
 
         #%% Visualization panel
-        self.control_frame = tk.Frame(self.bottom_container)
+        self.control_frame = ctk.CTkFrame(self.bottom_container)
         self.control_frame.grid(row=0, column=0, sticky="w", padx=5, pady=5)
 
-        # Choose SAR scene
-        self.Choose_SAR_scene_toggle_btn = tk.Button(self.control_frame, text=f"Choose SAR scene", command=self.Choose_SAR_scene)
-        self.Choose_SAR_scene_toggle_btn.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=5)
+        # Image selection frame
+        self.select_image_frame = ctk.CTkFrame(self.control_frame)
+        self.select_image_frame.grid(row=0, column=0, padx=5)
 
-        # Radio buttons for explicit selection
-        self.mode_var_HH_HV = tk.StringVar(value="A")  # Default selection
-        tk.Radiobutton(self.control_frame, text="HH", variable=self.mode_var_HH_HV,
-                       value="A", command=self.HH_HV).grid(row=1, column=0, sticky="nsew", padx=5, pady=(10, 10))
-        tk.Radiobutton(self.control_frame, text="HV", variable=self.mode_var_HH_HV,
-                       value="B", command=self.HH_HV).grid(row=1, column=1, sticky="nsew", pady=(10, 10))
+        # Choose SAR scene
+        self.Choose_SAR_scene_toggle_btn = ctk.CTkButton(self.select_image_frame, text=f"Choose SAR scene", command=self.Choose_SAR_scene)
+        self.Choose_SAR_scene_toggle_btn.grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=5)
+
+        # Choose channel (Switch)
+        ctk.CTkLabel(self.select_image_frame, text="HH/HV").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+        self.HH_HV_switch = ctk.CTkSwitch(self.select_image_frame, text="", command=self.HH_HV)
+        self.HH_HV_switch.grid(row=1, column=1, sticky="w", padx=5, pady=5)
 
         # Better Contrast ON/OFF
+        ctk.CTkLabel(self.select_image_frame, text="Better contrast").grid(row=2, column=0, sticky="e", padx=5, pady=5)
+
         self.Better_contrast_toggle_state = True
         state = "ON" if self.Better_contrast_toggle_state else "OFF"
-        self.Better_contrast_toggle_btn = tk.Button(self.control_frame, text=f"Better contrast: {state}", 
+        self.Better_contrast_toggle_btn = ctk.CTkButton(self.select_image_frame, text=state, 
                                                     width=19,
                                                     command=self.Better_contrast_toggle)
-        self.Better_contrast_toggle_btn.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=5)
+        self.Better_contrast_toggle_btn.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        self.default_fg_color = self.Better_contrast_toggle_btn.cget("fg_color")
+        self.default_hover_color = self.Better_contrast_toggle_btn.cget("hover_color")
+        self.default_text_color = self.Better_contrast_toggle_btn.cget("text_color")        
 
         # Opacity slider
-        self.Opacity_slider_value = tk.IntVar(value=50)  # Default value
-        tk.Label(self.control_frame, text="Opacity:").grid(row=0, column=2, sticky="nsew", padx=5)
-        self.slider = tk.Scale(self.control_frame,
-                               from_=0, to=100,
-                               resolution=5,
-                               orient=tk.HORIZONTAL,
-                               variable=self.Opacity_slider_value,
-                               command=self.Opacity_slider,
-                               length=100)
-        self.slider.grid(row=0, column=3, sticky="nsew")
+        self.labels_frame = ctk.CTkFrame(self.control_frame)
+        self.labels_frame.grid(row=0, column=1, padx=5)
+
+        self.Opacity_slider_value = 50  # Initial value
+        ctk.CTkLabel(self.labels_frame, text="Opacity").grid(row=0, column=0, sticky='e', padx=5, pady=5)
+        self.slider = ctk.CTkSlider(self.labels_frame,
+                                    from_=0, to=100,
+                                    number_of_steps=20,
+                                    width=100,
+                                    command=self.Opacity_slider)
+        self.slider.set(self.Opacity_slider_value)  # Set initial value
+        self.slider.grid(row=0, column=1, pady=5)
 
         # Classes ON/OFF
+        ctk.CTkLabel(self.labels_frame, text="Ice/Water Labels").grid(row=2, column=0, sticky='e', padx=5, pady=5)
         self.Polygon_toggle_state = True
         state = "ON" if self.Polygon_toggle_state else "OFF"
-        self.Polygon_toggle_btn = tk.Button(self.control_frame, text=f"Ice/Water Labels: {state}", command=self.Polygon_toggle)
-        self.Polygon_toggle_btn.grid(row=2, column=2, columnspan=2, sticky="nsew", padx=5)
+        self.Polygon_toggle_btn = ctk.CTkButton(self.labels_frame, text=state, width=19, command=self.Polygon_toggle)
+        self.Polygon_toggle_btn.grid(row=2, column=1, sticky='w', padx=5, pady=5)
         
         # Zoom selection button
-        self.zoom_select_btn = tk.Button(self.control_frame, text="Zoom to Selection Mode", command=self.enable_zoom_selection)
-        self.zoom_select_btn.grid(row=0, column=4, sticky="nsew", padx=5)
+        self.zoom_frame = ctk.CTkFrame(self.control_frame)
+        self.zoom_frame.grid(row=0, column=2, padx=5)
+        self.zoom_select_btn = ctk.CTkButton(self.zoom_frame, text="Zoom to Selection Mode", command=self.enable_zoom_selection)
+        self.zoom_select_btn.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
 
         # Reset zoom button
-        reset_btn = tk.Button(self.control_frame, text="Reset Zoom", command=self.reset_zoom)
-        reset_btn.grid(row=2, column=4, sticky="nsew", padx=5)
+        reset_btn = ctk.CTkButton(self.zoom_frame, text="Reset Zoom", command=self.reset_zoom)
+        reset_btn.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
         #%% Labels source
-        self.lbl_source_frame = tk.LabelFrame(self.bottom_container, text="Label Source")
+        self.lbl_source_frame = ctk.CTkFrame(self.bottom_container)
+        ctk.CTkLabel(self.lbl_source_frame, text="Label Source", font=("Arial", 14, "bold")).grid(row=0, column=0, sticky="w", pady=5)
         self.lbl_source_frame.grid(row=0, column=1, sticky="e", padx=5, pady=5)
 
         self.lbl_source = [
@@ -201,14 +219,14 @@ class Visualizer(tk.Tk):
         self.filenames = ["/{}/{}".format(lbl_s, file) for lbl_s, file in zip(self.lbl_source, filenames_)]
 
         # Radio buttons for explicit selection
-        self.mode_var_lbl_source = tk.StringVar(value=self.lbl_source[0])  # Default selection
+        self.mode_var_lbl_source = ctk.StringVar(value=self.lbl_source[0])  # Default selection
         self.mode_var_lbl_source_prev = self.mode_var_lbl_source.get()
         for i, lbl_s in enumerate(self.lbl_source):
-            tk.Radiobutton(self.lbl_source_frame, text=lbl_s, variable=self.mode_var_lbl_source,
+            ctk.CTkRadioButton(self.lbl_source_frame, text=lbl_s, variable=self.mode_var_lbl_source,
                         value=lbl_s, command=self.Choose_lbl_source).grid(row=i, column=0, sticky="w", pady=(10, 10))
 
         #%% Evaluation panel
-        self.evaluation_frame = tk.Frame(self.bottom_container)
+        self.evaluation_frame = ctk.CTkFrame(self.bottom_container)
         self.evaluation_frame.grid(row=0, column=2, sticky="e", padx=5, pady=5)
 
         self.evaluation_panel = EvaluationPanel(self.evaluation_frame)
@@ -221,8 +239,8 @@ class Visualizer(tk.Tk):
         self.alpha = 0.5
         self.channel = 0
         
-        self.set_enabled(False)
-        self.lbl_source_set_enabled(False)
+        self._set_all_children_enabled(self.control_frame, False, exclude=[self.Choose_SAR_scene_toggle_btn])
+        self._set_all_children_enabled(self.lbl_source_frame, False)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(500, self.Choose_SAR_scene)
 
@@ -433,14 +451,44 @@ class Visualizer(tk.Tk):
     def Polygon_toggle(self):
         self.Polygon_toggle_state = not self.Polygon_toggle_state
         state = "ON" if self.Polygon_toggle_state else "OFF"
-        self.Polygon_toggle_btn.config(text=f"Ice/Water Labels: {state}")
+        self.Polygon_toggle_btn.configure(text=state)
+
+        if self.Polygon_toggle_state:
+            # Restore default appearance
+            self.Polygon_toggle_btn.configure(
+                fg_color=self.default_fg_color,  # Default customtkinter blue
+                hover_color=self.default_hover_color,
+                text_color=self.default_text_color
+            )
+        else:
+            # Set to gray when OFF
+            self.Polygon_toggle_btn.configure(
+                fg_color="#888888",     # Gray background
+                hover_color="#777777",  # Slightly darker on hover
+                text_color="white"
+            )
 
         self.display_image()
 
     def Better_contrast_toggle(self):
         self.Better_contrast_toggle_state = not self.Better_contrast_toggle_state
         state = "ON" if self.Better_contrast_toggle_state else "OFF"
-        self.Better_contrast_toggle_btn.config(text=f"Better contrast: {state}")
+        self.Better_contrast_toggle_btn.configure(text=state)
+
+        if self.Better_contrast_toggle_state:
+            # Restore default appearance
+            self.Better_contrast_toggle_btn.configure(
+                fg_color=self.default_fg_color,  # Default customtkinter blue
+                hover_color=self.default_hover_color,
+                text_color=self.default_text_color
+            )
+        else:
+            # Set to gray when OFF
+            self.Better_contrast_toggle_btn.configure(
+                fg_color="#888888",     # Gray background
+                hover_color="#777777",  # Slightly darker on hover
+                text_color="white"
+            )
 
         self.Choose_image()
 
@@ -463,7 +511,7 @@ class Visualizer(tk.Tk):
         
         prev_folder_path = self.folder_path
 
-        root = tk.Tk()
+        root = ctk.CTk()
         root.withdraw()
         self.folder_path = filedialog.askdirectory(initialdir=os.path.dirname(prev_folder_path) if self.folder_path else os.getcwd(),
                                                    title='Select the dated directory containing HH/HV and segmentation results')
@@ -474,9 +522,9 @@ class Visualizer(tk.Tk):
             if self.folder_path == prev_folder_path:
                 return
 
-            scene_name = self.folder_path.split('/')[-1]
+            self.scene_name = self.folder_path.split('/')[-1]
 
-            self.title("Scene " + scene_name)
+            self.title(f"Scene {self.scene_name}-{"HV" if self.channel else "HH"}")
             if not self.Load_Images(): 
                 self.folder_path = ''
                 return
@@ -489,10 +537,10 @@ class Visualizer(tk.Tk):
             self.update_idletasks()
             self.after(100, self.reset_zoom)    # Delay the initial reset call with .after() so the canvas has its final size:
             
-            self.evaluation_panel.set_scene_name(scene_name)
+            self.evaluation_panel.set_scene_name(self.scene_name)
             self.evaluation_panel.set_enabled(True)
-            self.set_enabled(True)
-            self.lbl_source_set_enabled(True)
+            self._set_all_children_enabled(self.control_frame, True)
+            self._set_all_children_enabled(self.lbl_source_frame, True)
 
         else:
             self.folder_path = prev_folder_path
@@ -523,10 +571,11 @@ class Visualizer(tk.Tk):
         self.alpha = float(val)/100
         self.Overlay()
         self.display_image()
-        
+
     def HH_HV(self):
-        selected = self.mode_var_HH_HV.get()
-        self.channel = 1 if selected == 'B' else 0
+        self.channel = 1 if self.HH_HV_switch.get() else 0
+
+        self.title(f"Scene {self.scene_name}-{"HV" if self.channel else "HH"}")
         
         self.Choose_image()
 
@@ -622,30 +671,21 @@ class Visualizer(tk.Tk):
         self.Overlay()
         self.display_image()
 
+    
+    def _set_all_children_enabled(self, parent, enabled=True, exclude=[]):
+        state = ctk.NORMAL if enabled else ctk.DISABLED
 
-    def set_enabled(self, enabled=True):
-        state = tk.NORMAL if enabled else tk.DISABLED
-
-        for child in self.control_frame.winfo_children():
-            # Skip the Choose_SAR_scene button
-            if child is self.Choose_SAR_scene_toggle_btn:
+        for child in parent.winfo_children():
+            if child in exclude:
                 continue
-            try:
-                child.configure(state=state)
-            except tk.TclError:
-                pass  # Some widgets like labels may not support 'state'
+            if type(child) in (ctk.CTkFrame, tk.Frame):
+                self._set_all_children_enabled(child, enabled, exclude)
+            else:
+                try:
+                    child.configure(state=state)
+                except (tk.TclError, ValueError):
+                    pass
 
-    def lbl_source_set_enabled(self, enabled=True):
-        state = tk.NORMAL if enabled else tk.DISABLED
-
-        for child in self.lbl_source_frame.winfo_children():
-            # Skip the Choose_SAR_scene button
-            if child is self.Choose_SAR_scene_toggle_btn:
-                continue
-            try:
-                child.configure(state=state)
-            except tk.TclError:
-                pass  # Some widgets like labels may not support 'state'
 
     def on_close(self):
         if self.evaluation_panel.unsaved_changes:

@@ -1,57 +1,52 @@
-'''
-No@
-June 2025
-'''
-import tkinter as tk
+import customtkinter as ctk
 from tkinter import messagebox
 import json
 import os
 import datetime
 import csv
 
-class EvaluationPanel(tk.LabelFrame):
+class EvaluationPanel(ctk.CTkFrame):
     def __init__(self, parent):
-        super().__init__(parent, text="Prediction Evaluation", padx=10, pady=10)
+        super().__init__(parent)
+        # self.configure(padx=10, pady=10)
 
         self.scene_name = ""
         self.unsaved_changes = False
 
-        self.region_evaluation = tk.StringVar(value=" ")
-        self.boundary_evaluation = tk.StringVar(value=" ")
+        self.region_evaluation = ctk.StringVar(value=" ")
+        self.boundary_evaluation = ctk.StringVar(value=" ")
 
-        for col in range(4):
-            self.grid_columnconfigure(col, weight=1)
+        self.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
 
-        tk.Label(self, text="").grid(row=0, column=0, sticky="w")
-        tk.Label(self, text="Region:").grid(row=1, column=0, sticky="w")
-        tk.Label(self, text="Boundaries:").grid(row=2, column=0, sticky="w")
+        ctk.CTkLabel(self, text="").grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(self, text="Region:").grid(row=1, column=0, sticky="w")
+        ctk.CTkLabel(self, text="Boundaries:").grid(row=2, column=0, sticky="w")
 
         # Region Radiobuttons
-        # tk.Label(self, text="Accuracy").grid(row=0, column=1, sticky="nsew")
-        tk.Radiobutton(self, text="Highly accurate", variable=self.region_evaluation,
-                       value="high").grid(row=1, column=1, sticky="nsew")
-        tk.Radiobutton(self, text="Sufficient", variable=self.region_evaluation,
-                       value="sufficient").grid(row=1, column=2, sticky="nsew")
-        tk.Radiobutton(self, text="Not sufficient", variable=self.region_evaluation,
-                       value="not sufficient").grid(row=1, column=3, sticky="nsew")
+        ctk.CTkRadioButton(self, text="Highly accurate", variable=self.region_evaluation,
+                           value="high").grid(row=1, column=1, sticky="nsew", padx=(0,5))
+        ctk.CTkRadioButton(self, text="Sufficient", variable=self.region_evaluation,
+                           value="sufficient").grid(row=1, column=2, sticky="nsew", padx=(0,5))
+        ctk.CTkRadioButton(self, text="Not sufficient", variable=self.region_evaluation,
+                           value="not sufficient").grid(row=1, column=3, sticky="nsew", padx=(0,5))
 
         # Boundary Radiobuttons
-        tk.Label(self, text="Operational Capability").grid(row=0, column=1, columnspan=3, sticky="nsew")
-        tk.Radiobutton(self, text="Highly accurate", variable=self.boundary_evaluation,
-                       value="high").grid(row=2, column=1, sticky="nsew")
-        tk.Radiobutton(self, text="Sufficient", variable=self.boundary_evaluation,
-                       value="sufficient").grid(row=2, column=2, sticky="nsew")
-        tk.Radiobutton(self, text="Not sufficient", variable=self.boundary_evaluation,
-                       value="not sufficient").grid(row=2, column=3, sticky="nsew")
+        ctk.CTkLabel(self, text="Operational Capability").grid(row=0, column=1, columnspan=3, sticky="nsew")
+        ctk.CTkRadioButton(self, text="Highly accurate", variable=self.boundary_evaluation,
+                           value="high").grid(row=2, column=1, sticky="nsew", padx=(0,5))
+        ctk.CTkRadioButton(self, text="Sufficient", variable=self.boundary_evaluation,
+                           value="sufficient").grid(row=2, column=2, sticky="nsew", padx=(0,5))
+        ctk.CTkRadioButton(self, text="Not sufficient", variable=self.boundary_evaluation,
+                           value="not sufficient").grid(row=2, column=3, sticky="nsew", padx=(0,5))
 
-        tk.Label(self, text="Notes:").grid(row=0, column=4, sticky="w", padx = 10)
-        self.notes_text = tk.Text(self, width=40, height=6)
-        self.notes_text.grid(row=1, column=4, rowspan=3, pady=(10, 0), padx = 10)
+        # Notes
+        ctk.CTkLabel(self, text="Notes:").grid(row=0, column=4, sticky="w", padx=10)
+        self.notes_text = ctk.CTkTextbox(self, width=300, height=100)
+        self.notes_text.grid(row=1, column=4, rowspan=3, pady=(10, 0), padx=10)
 
-        self.save_button = tk.Button(self, text="Save Evaluation", command=self.save_evaluation)
+        self.save_button = ctk.CTkButton(self, text="Save Evaluation", command=self.save_evaluation)
         self.save_button.grid(row=0, column=0, pady=10)
 
-        # Add traces to mark unsaved changes
         self._trace_region_id = self.region_evaluation.trace_add("write", lambda *args: self._mark_unsaved())
         self._trace_boundary_id = self.boundary_evaluation.trace_add("write", lambda *args: self._mark_unsaved())
         self.notes_text.bind("<KeyRelease>", lambda e: self._mark_unsaved())
@@ -59,7 +54,7 @@ class EvaluationPanel(tk.LabelFrame):
     def _mark_unsaved(self):
         if not self.unsaved_changes:
             self.unsaved_changes = True
-            self.config(text="* Prediction Evaluation")
+            self.save_button.configure(text="* Save Evaluation")
 
     def set_scene_name(self, name):
         self.scene_name = name
@@ -76,18 +71,15 @@ class EvaluationPanel(tk.LabelFrame):
                         self.region_evaluation.set(scene_data.get("region", "").strip())
                         self.boundary_evaluation.set(scene_data.get("boundaries", "").strip())
 
-                        self.notes_text.config(state=tk.NORMAL)
-                        self.notes_text.delete("1.0", tk.END)
-                        self.notes_text.insert(tk.END, scene_data.get("notes", ""))
-                        
-                        self.notes_text.focus_set()
-                        # self.notes_text.mark_set("insert", "1.0")
-                       
+                        self.notes_text.configure(state=ctk.NORMAL)
+                        self.notes_text.delete("1.0", "end")
+                        self.notes_text.insert("end", scene_data.get("notes", ""))
+
                         self.unsaved_changes = False
-                        self.config(text="Prediction Evaluation")
+                        self.save_button.configure(text="Save Evaluation")
                         messagebox.showinfo("Loaded", f"Existing evaluation loaded for scene '{self.scene_name}'")
                     else:
-                        self.reset_fields()  # reset if no data for this scene
+                        self.reset_fields()
                 except json.JSONDecodeError:
                     pass
         else:
@@ -100,7 +92,7 @@ class EvaluationPanel(tk.LabelFrame):
 
         region_accuracy = self.region_evaluation.get().strip()
         boundary_accuracy = self.boundary_evaluation.get().strip()
-        notes = self.notes_text.get("1.0", tk.END).strip()
+        notes = self.notes_text.get("1.0", "end").strip()
 
         if region_accuracy == '' and boundary_accuracy == '':
             messagebox.showerror("Warning", "Evaluation incomplete")
@@ -146,9 +138,11 @@ class EvaluationPanel(tk.LabelFrame):
         self._save_to_csv(self.scene_name, region_accuracy, boundary_accuracy, notes)
 
         self.unsaved_changes = False
-        self.config(text="Prediction Evaluation")
-        self._show_silent_popup("Saved" if not overwrite else "Updated", f"Evaluation saved to {filename}")
-
+        self.save_button.configure(text="Save Evaluation")
+        # self._show_silent_popup("Saved" if not overwrite else "Updated", f"Evaluation saved to {filename}")
+        messagebox.showinfo("Saved" if not overwrite else "Updated", f"Evaluation saved to {filename}")
+        # self.status_label.configure(text="Evaluation saved to {filename}" if not overwrite else "Evaluation updated to {filename}")
+        # self.after(3000, lambda: self.status_label.configure(text=""))
         return True
 
     def _save_to_csv(self, scene_name, region_eval, boundary_eval, notes):
@@ -178,15 +172,16 @@ class EvaluationPanel(tk.LabelFrame):
             writer.writeheader()
             writer.writerows(rows)
 
+
     def _show_silent_popup(self, title, message):
-        popup = tk.Toplevel(self)
+        popup = ctk.CTkToplevel(self)
         popup.title(title)
         popup.resizable(False, False)
         popup.transient(self)
         popup.grab_set()
 
-        tk.Label(popup, text=message, padx=20, pady=10).pack()
-        tk.Button(popup, text="OK", command=popup.destroy).pack(pady=(0, 10))
+        ctk.CTkLabel(popup, text=message, padx=20, pady=10).pack()
+        ctk.CTkButton(popup, text="OK", command=popup.destroy).pack(pady=(0, 10))
 
         popup.update_idletasks()
         w = popup.winfo_width()
@@ -194,54 +189,42 @@ class EvaluationPanel(tk.LabelFrame):
         x = self.winfo_rootx() + (self.winfo_width() - w) // 2
         y = self.winfo_rooty() + (self.winfo_height() - h) // 2
         popup.geometry(f"{w}x{h}+{x}+{y}")
-
-        # Wait until popup is closed
         popup.wait_window()
 
-    def set_enabled(self, enabled=True):
-        # bg_color = "SystemButtonFace" if enabled else "#dddddd"
-        state = tk.NORMAL if enabled else tk.DISABLED
 
-        # Change state and background color for all interactive widgets
+    def set_enabled(self, enabled=True):
+        state = ctk.NORMAL if enabled else ctk.DISABLED
         for child in self.winfo_children():
-            widget_type = child.winfo_class()
-            if widget_type in ("Button", "Radiobutton", "Text"):
-                try:
-                    child.configure(state=state)
-                except:
-                    pass
-            # try:
-            #     child.configure(bg=bg_color)
-            # except:
-            #     pass
+            try:
+                child.configure(state=state)
+            except:
+                pass
 
     def reset_fields(self):
-        # Temporarily remove traces
         self.region_evaluation.trace_remove("write", self._trace_region_id)
         self.boundary_evaluation.trace_remove("write", self._trace_boundary_id)
-    
-        # Reset values without triggering _mark_unsaved
+
         self.region_evaluation.set(" ")
         self.boundary_evaluation.set(" ")
 
-        # Reattach traces
         self._trace_region_id = self.region_evaluation.trace_add("write", lambda *args: self._mark_unsaved())
         self._trace_boundary_id = self.boundary_evaluation.trace_add("write", lambda *args: self._mark_unsaved())
 
-        # Reset notes field
-        self.notes_text.config(state=tk.NORMAL)
-        self.notes_text.delete("1.0", tk.END)
+        self.notes_text.configure(state=ctk.NORMAL)
+        self.notes_text.delete("1.0", "end")
 
-        # Clear unsaved state
         self.unsaved_changes = False
-        self.config(text="Prediction Evaluation")
+        self.save_button.configure(text="Save Evaluation")
 
 if __name__ == '__main__':
-    root = tk.Tk()
+    ctk.set_appearance_mode("System")  # "Dark", "Light", or "System"
+    ctk.set_default_color_theme("blue")  # or "green", "dark-blue", etc.
+
+    root = ctk.CTk()
     root.title("Evaluation Panel")
 
     panel = EvaluationPanel(root)
-    panel.pack(padx=10, pady=10)
+    panel.pack(padx=10, pady=10, fill="both", expand=True)
 
     panel.set_scene_name("example_scene")
 
