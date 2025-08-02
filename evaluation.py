@@ -77,7 +77,7 @@ class EvaluationPanel(ctk.CTkFrame):
 
                         self.unsaved_changes = False
                         self.save_button.configure(text="Save Evaluation")
-                        messagebox.showinfo("Loaded", f"Existing evaluation loaded for scene '{self.scene_name}'")
+                        messagebox.showinfo("Loaded", f"Existing evaluation loaded for scene '{self.scene_name}'", parent=self.master)
                     else:
                         self.reset_fields()
                 except json.JSONDecodeError:
@@ -127,7 +127,8 @@ class EvaluationPanel(ctk.CTkFrame):
         overwrite = False
         if self.scene_name in existing_data:
             overwrite = messagebox.askyesno("Overwrite?",
-                f"An entry already exists for scene '{self.scene_name}'. Do you want to replace it?")
+                f"An entry already exists for scene '{self.scene_name}'. Do you want to replace it?",
+                parent=self.master)
             if not overwrite:
                 return False
 
@@ -140,7 +141,7 @@ class EvaluationPanel(ctk.CTkFrame):
         self.unsaved_changes = False
         self.save_button.configure(text="Save Evaluation")
         # self._show_silent_popup("Saved" if not overwrite else "Updated", f"Evaluation saved to {filename}")
-        messagebox.showinfo("Saved" if not overwrite else "Updated", f"Evaluation saved to {filename}")
+        messagebox.showinfo("Saved" if not overwrite else "Updated", f"Evaluation saved to {filename}", parent=self.master)
         # self.status_label.configure(text="Evaluation saved to {filename}" if not overwrite else "Evaluation updated to {filename}")
         # self.after(3000, lambda: self.status_label.configure(text=""))
         return True
