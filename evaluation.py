@@ -6,10 +6,13 @@ import datetime
 import csv
 
 class EvaluationPanel(ctk.CTkFrame):
-    def __init__(self, parent):
+    def __init__(self, parent, command_parent=None):
         super().__init__(parent)
-        # self.configure(padx=10, pady=10)
 
+        if command_parent is None:
+            command_parent = self
+        self.command_parent = command_parent
+        
         self.scene_name = ""
         self.unsaved_changes = False
 
@@ -68,16 +71,22 @@ class EvaluationPanel(ctk.CTkFrame):
                     data = json.load(f)
                     if self.scene_name in data:
                         scene_data = data[self.scene_name]
-                        self.region_evaluation.set(scene_data.get("region", "").strip())
-                        self.boundary_evaluation.set(scene_data.get("boundaries", "").strip())
 
-                        self.notes_text.configure(state=ctk.NORMAL)
-                        self.notes_text.delete("1.0", "end")
-                        self.notes_text.insert("end", scene_data.get("notes", ""))
+                        lbl_source = self.command_parent.mode_var_lbl_source.get()
+                        if lbl_source in scene_data:
 
-                        self.unsaved_changes = False
-                        self.save_button.configure(text="Save Evaluation")
-                        messagebox.showinfo("Loaded", f"Existing evaluation loaded for scene '{self.scene_name}'", parent=self.master)
+                            self.region_evaluation.set(scene_data[lbl_source].get("region", "").strip())
+                            self.boundary_evaluation.set(scene_data[lbl_source].get("boundaries", "").strip())
+
+                            self.notes_text.configure(state=ctk.NORMAL)
+                            self.notes_text.delete("1.0", "end")
+                            self.notes_text.insert("end", scene_data[lbl_source].get("notes", ""))
+
+                            self.unsaved_changes = False
+                            self.save_button.configure(text="Save Evaluation")
+                            messagebox.showinfo("Loaded", f"Existing evaluation loaded for prediction '{lbl_source}' on scene '{self.scene_name}'", parent=self.master)
+                        else:
+                            self.reset_fields()
                     else:
                         self.reset_fields()
                 except json.JSONDecodeError:
@@ -88,6 +97,11 @@ class EvaluationPanel(ctk.CTkFrame):
     def save_evaluation(self):
         if not self.scene_name:
             messagebox.showerror("Error", "Scene name is not set.")
+            return False
+
+        lbl_source = self.command_parent.mode_var_lbl_source.get()
+        if lbl_source == "Custom Annotation":
+            messagebox.showerror("Warning", "Please, evaluate segmentation source different from 'Custom Annotation'.")
             return False
 
         region_accuracy = self.region_evaluation.get().strip()
@@ -106,9 +120,11 @@ class EvaluationPanel(ctk.CTkFrame):
 
         new_data = {
             self.scene_name: {
-                "region": region_accuracy,
-                "boundaries": boundary_accuracy,
-                "notes": notes
+                lbl_source:{
+                    "region": region_accuracy,
+                    "boundaries": boundary_accuracy,
+                    "notes": notes
+                }
             }
         }
 
@@ -126,17 +142,20 @@ class EvaluationPanel(ctk.CTkFrame):
 
         overwrite = False
         if self.scene_name in existing_data:
-            overwrite = messagebox.askyesno("Overwrite?",
-                f"An entry already exists for scene '{self.scene_name}'. Do you want to replace it?",
-                parent=self.master)
-            if not overwrite:
-                return False
+            if lbl_source in existing_data[self.scene_name]:
+                overwrite = messagebox.askyesno("Overwrite?",
+                    f"An evaluation already exists for '{lbl_source}' on scene '{self.scene_name}'. Do you want to replace it?",
+                    parent=self.master)
+                if not overwrite:
+                    return False
+            existing_data[self.scene_name].update(new_data[self.scene_name])
+        else:
+            existing_data.update(new_data)
 
-        existing_data.update(new_data)
         with open(filename, "w") as f:
             json.dump(existing_data, f, indent=4)
 
-        self._save_to_csv(self.scene_name, region_accuracy, boundary_accuracy, notes)
+        self._save_to_csv(self.scene_name, lbl_source, region_accuracy, boundary_accuracy, notes)
 
         self.unsaved_changes = False
         self.save_button.configure(text="Save Evaluation")
@@ -146,10 +165,10 @@ class EvaluationPanel(ctk.CTkFrame):
         # self.after(3000, lambda: self.status_label.configure(text=""))
         return True
 
-    def _save_to_csv(self, scene_name, region_eval, boundary_eval, notes):
+    def _save_to_csv(self, scene_name, lbl_source, region_eval, boundary_eval, notes):
         csv_file = os.path.join("evaluations", "evaluation_data.csv")
         file_exists = os.path.isfile(csv_file)
-        fieldnames = ["scene_name", "region", "boundaries", "notes", "timestamp"]
+        fieldnames = ["scene_name", "lbl_source", "region", "boundaries", "notes", "timestamp"]
 
         rows = []
         if file_exists:
@@ -157,10 +176,11 @@ class EvaluationPanel(ctk.CTkFrame):
                 reader = csv.DictReader(f)
                 rows = list(reader)
 
-        rows = [row for row in rows if row["scene_name"] != scene_name]
+        rows = [row for row in rows if row["scene_name"] != scene_name or row["lbl_source"] != lbl_source]
 
         new_row = {
             "scene_name": scene_name,
+            "lbl_source": lbl_source,
             "region": region_eval,
             "boundaries": boundary_eval,
             "notes": notes,
@@ -202,6 +222,7 @@ class EvaluationPanel(ctk.CTkFrame):
                 pass
 
     def reset_fields(self):
+
         self.region_evaluation.trace_remove("write", self._trace_region_id)
         self.boundary_evaluation.trace_remove("write", self._trace_boundary_id)
 
@@ -216,6 +237,7 @@ class EvaluationPanel(ctk.CTkFrame):
 
         self.unsaved_changes = False
         self.save_button.configure(text="Save Evaluation")
+
 
 if __name__ == '__main__':
     ctk.set_appearance_mode("System")  # "Dark", "Light", or "System"

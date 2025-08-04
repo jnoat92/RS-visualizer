@@ -17,7 +17,6 @@ class AnnotationPanel(ctk.CTkFrame):
 
         if command_parent is None:
             command_parent = self
-        
         self.command_parent = command_parent
 
         # Drawing tools frame
@@ -40,6 +39,17 @@ class AnnotationPanel(ctk.CTkFrame):
         ctk.CTkButton(self.labels_frame, text="reset from", 
                       width=20, command=self.reset_label_from).grid(row=1, column=2, padx=5, pady=5)
 
+        # Saving annotations
+        self.saving_frame = ctk.CTkFrame(self)
+        self.saving_frame.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
+        self.save_button = ctk.CTkButton(self.saving_frame, text="Save Annotation", 
+                                         width=20, command=self.save_annotation)
+        self.save_button.grid(row=0, column=0, padx=5, pady=5)
+
+        self.unsaved_changes = False
+        self.save_button.configure(state=ctk.DISABLED)
+
+
     def reset_label_from(self):
         """Reset the label from available label sources."""
         if 'Custom Annotation' not in self.command_parent.lbl_source:
@@ -59,6 +69,8 @@ class AnnotationPanel(ctk.CTkFrame):
 
         # Create new window
         self.zoom_window = ctk.CTkToplevel(self)
+        self.zoom_window.transient(self)  # Set parent window
+        self.zoom_window.attributes("-topmost", True)  # Always on top
         self.zoom_window.title("Reset annotations from label source")
 
         screen_width = self.zoom_window.winfo_screenwidth()
@@ -146,8 +158,30 @@ class AnnotationPanel(ctk.CTkFrame):
         # Convert to PhotoImage
         self.zoom_tk_image = ImageTk.PhotoImage(Image.fromarray(image))
         self.zoom_canvas.delete("all")
+
         self.zoom_canvas.create_image(canvas_width // 2, canvas_height // 2, 
-                                    anchor=ctk.CENTER, image=self.zoom_tk_image)
+                                      anchor=ctk.CENTER, image=self.zoom_tk_image)
+
+        # Centering offset
+        x_offset = (canvas_width - zoomed_width) // 2
+        y_offset = (canvas_height - zoomed_height) // 2
+
+        # Draw polygon
+        if not self.command_parent.multiple_polygons:
+            polygon_points_img_coor = [self.command_parent.polygon_points_img_coor]
+        else:
+            polygon_points_img_coor = self.command_parent.polygon_points_img_coor
+        
+        for p_img_coor in polygon_points_img_coor:
+            polygon_points = [
+                ((x - img_x_min) * zoom_factor + x_offset,
+                 (y - img_y_min) * zoom_factor + y_offset)
+                for x, y in p_img_coor
+            ]
+            self.zoom_canvas.create_polygon(
+                polygon_points, outline='yellow', width=1, fill=''
+            )
+
 
     def apply_label_source(self):
         """Apply the selected label source to the main canvas for the selected area."""
@@ -156,8 +190,15 @@ class AnnotationPanel(ctk.CTkFrame):
             messagebox.showinfo("Error", f"Invalid label source {key}.", parent=self.zoom_window)
             return
 
+
         # Update the prediction in the selected area
         if self.command_parent.selected_polygon_area_idx:
+            self.command_parent.mode_var_lbl_source.set("Custom Annotation")
+            main_key = self.command_parent.mode_var_lbl_source.get()
+            # if main_key != "Custom Annotation":
+            #     messagebox.showinfo("Error", "Only 'Custom Annotation' segmentation source can be reset.", parent=self.zoom_window)
+            #     return
+
             self.command_parent.pred[self.command_parent.selected_polygon_area_idx] = \
                 self.command_parent.predictions[key][self.command_parent.selected_polygon_area_idx]
             self.command_parent.pred[self.command_parent.landmask] = [255, 255, 255]
@@ -173,18 +214,43 @@ class AnnotationPanel(ctk.CTkFrame):
                     self.command_parent.pred[img_y_min:img_y_max, img_x_min:img_x_max]))
 
             # Update current label source
-            current_key = self.command_parent.mode_var_lbl_source.get()
-            self.command_parent.predictions[current_key] = self.command_parent.pred.copy()
-            self.command_parent.landmasks[current_key] = self.command_parent.landmask.copy()
-            self.command_parent.boundmasks[current_key] = self.command_parent.boundmask.copy()
+            self.command_parent.predictions[main_key] = self.command_parent.pred.copy()
+            self.command_parent.landmasks[main_key] = self.command_parent.landmask.copy()
+            self.command_parent.boundmasks[main_key] = self.command_parent.boundmask.copy()
 
             # Update main display
             self.command_parent.crop_resize()
             self.command_parent.Overlay()
             self.command_parent.display_image()
+            if self.command_parent.polygon_points_img_coor: 
+                self.command_parent.draw_polygon_on_canvas()
 
             # Close the zoom window
             self.zoom_window.destroy()
+
+            self.command_parent.lbl_source_buttom[main_key].configure(text=f"* {main_key}")
+            self.unsaved_changes = True
+            self.save_button.configure(state=ctk.NORMAL)
+
+    def save_annotation(self):
+
+        key = "Custom Annotation"
+        if key not in self.command_parent.predictions.keys():
+            messagebox.showerror("Error", f"There is no {key} to save.")
+            return False
+        
+        file_path = self.command_parent.folder_path + self.command_parent.filenames[list(self.command_parent.predictions).index(key)]
+        os.makedirs(os.path.split(file_path)[0], exist_ok=True)
+        Image.fromarray(self.command_parent.predictions[key]).save(file_path)
+
+        # mark as saved
+        self.command_parent.lbl_source_buttom[key].configure(text=key)
+        self.unsaved_changes = False
+        self.save_button.configure(state=ctk.DISABLED)
+
+        messagebox.showinfo("Saved", f"Evaluation saved to {file_path}", parent=self.master)
+        return True
+
 
     def draw_rectangle(self):
         pass

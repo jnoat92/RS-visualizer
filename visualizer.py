@@ -226,11 +226,13 @@ class Visualizer(ctk.CTk):
 
         # # # Evaluation panel
         self.evaluation_window = ctk.CTkToplevel(self)
+        self.evaluation_window.transient(self)  # Set parent window
+        self.evaluation_window.attributes("-topmost", True)  # Always on top
         self.evaluation_window.title("Evaluation Panel")
         self.evaluation_window.withdraw()  # Hide the window at start
-        self.evaluation_window.protocol("WM_DELETE_WINDOW", self.evaluation_window.withdraw) # Hide window instead of destroying it on close
+        self.evaluation_window.protocol("WM_DELETE_WINDOW", self.close_evaluation_panel) # Hide window instead of destroying it on close
 
-        self.evaluation_panel = EvaluationPanel(self.evaluation_window)
+        self.evaluation_panel = EvaluationPanel(self.evaluation_window, self)
         self.evaluation_panel.pack(fill="both", expand=True, padx=10, pady=10)
 
         ctk.CTkButton(self.operation_frame, text="Evaluation", 
@@ -239,9 +241,11 @@ class Visualizer(ctk.CTk):
 
         # # # Annotation panel
         self.annotation_window = ctk.CTkToplevel(self)
+        self.annotation_window.transient(self)  # Set parent window
+        self.annotation_window.attributes("-topmost", True)  # Always on top
         self.annotation_window.title("Annotation Panel")
         self.annotation_window.withdraw()  # Hide the window at start
-        self.annotation_window.protocol("WM_DELETE_WINDOW", self.annotation_window.withdraw) # Hide window instead of destroying it on close
+        self.annotation_window.protocol("WM_DELETE_WINDOW", self.close_annotation_panel) # Hide window instead of destroying it on close
 
         self.annotation_panel = AnnotationPanel(self.annotation_window, self)
         self.annotation_panel.pack(fill="both", expand=True, padx=10, pady=10)
@@ -471,9 +475,6 @@ class Visualizer(ctk.CTk):
             
             self._set_all_children_enabled(self.bottom_container, True)
 
-            if self.evaluation_window.winfo_viewable():
-                self.evaluation_panel.set_scene_name(self.scene_name)
-
         else:
             self.folder_path = prev_folder_path
 
@@ -641,8 +642,6 @@ class Visualizer(ctk.CTk):
     # Label source handle
 
     def Choose_lbl_source(self, plot=True):
-
-        self.reset_annotation()
 
         key = self.mode_var_lbl_source.get()
 
@@ -834,20 +833,64 @@ class Visualizer(ctk.CTk):
     
     def show_evaluation_panel(self):
         if self.annotation_window.winfo_viewable():
-            self.annotation_window.withdraw()
+            self.close_annotation_panel()
 
         if self.evaluation_panel.scene_name != self.scene_name:
             self.evaluation_panel.set_scene_name(self.scene_name)
         
         self.evaluation_window.deiconify()
         self.evaluation_window.focus_force()
-
+    
     def show_annotation_panel(self):
         if self.evaluation_window.winfo_viewable():
-            self.evaluation_window.withdraw()
+            self.close_evaluation_panel()
         
         self.annotation_window.deiconify()
         self.annotation_window.focus_force()
+
+    def close_evaluation_panel(self):
+        if self.evaluation_panel.unsaved_changes:
+            result = messagebox.askyesnocancel("Unsaved Changes", "You have unsaved evaluation data. Do you want to save before exiting?")
+            if result is None:
+                return  0   # Cancel
+            elif result:
+                if not self.evaluation_panel.save_evaluation():
+                    return  0   # Failed to save → don't close
+        
+        self.evaluation_panel.scene_name = ""
+        self.evaluation_panel.reset_fields()
+        self.evaluation_window.withdraw()
+        return 1
+
+    def close_annotation_panel(self):
+        if self.annotation_panel.unsaved_changes:
+            result = messagebox.askyesnocancel("Unsaved Changes", "Your 'Custom Annotation is unsaved'. Do you want to save before exiting?")
+            if result is None:
+                return  0   # Cancel
+            elif result:
+                if not self.annotation_panel.save_annotation():
+                    return  0   # Failed to save → don't close
+        
+        # Remove custom annotation from seg sources
+        for i in range(len(self.lbl_source)):
+            if self.lbl_source[i] == 'Custom Annotation':
+                self.lbl_source.pop(i)
+                break
+        for key in self.lbl_source_buttom.keys():
+            self.lbl_source_buttom[key].destroy()
+        self.lbl_source_buttom = {}
+        self.mode_var_lbl_source = None
+        self.mode_var_lbl_source_prev = None
+
+        for i, lbl_s in enumerate(self.lbl_source):
+            self.update_label_source_widgets(lbl_s, i)
+        
+        self.Choose_lbl_source()
+
+        self.reset_annotation()
+        self.annotation_window.withdraw()
+
+        return 1
 
 
     # Annotation options
@@ -985,15 +1028,19 @@ class Visualizer(ctk.CTk):
             return
             
         key = "Custom Annotation"
-        if key not in self.predictions.keys():
+        if key not in self.lbl_source_buttom.keys():
             # Add custom annotation as and additional label source
             self.lbl_source.append(key)
             self.filenames.append("/{}/{}".format(self.lbl_source[-1], "custom_annotation.png"))
             self.lbl_source_buttom[key] = ctk.CTkRadioButton(self.lbl_source_frame, 
-                                                             text=key, 
+                                                             text=f"* {key}", 
                                                              variable=self.mode_var_lbl_source, 
                                                              value=key, command=self.Choose_lbl_source)
-            self.lbl_source_buttom[key].grid(row=len(self.lbl_source), column=0, sticky="w", pady=(10, 10))        
+            self.lbl_source_buttom[key].grid(row=len(self.lbl_source), column=0, sticky="w", pady=(10, 10))
+        else:
+            self.lbl_source_buttom[key].configure(text=f"* {key}")
+        self.annotation_panel.unsaved_changes = True
+        self.annotation_panel.save_button.configure(state=ctk.NORMAL)
 
         self.mode_var_lbl_source.set(key)   # set custom annotation as current label source
         self.pred[self.selected_polygon_area_idx] = class_color
@@ -1043,14 +1090,9 @@ class Visualizer(ctk.CTk):
                     pass
 
     def on_close(self):
-        if self.evaluation_panel.unsaved_changes:
-            result = messagebox.askyesnocancel("Unsaved Changes", "You have unsaved evaluation data. Do you want to save before exiting?")
-            if result is None:
-                return  # Cancel
-            elif result:
-                if not self.evaluation_panel.save_evaluation():
-                    return  # Failed to save → don't close
-        self.destroy()
+        if self.close_evaluation_panel() and \
+           self.close_annotation_panel():
+            self.destroy()
 
 if __name__ == '__main__':
 
