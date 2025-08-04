@@ -645,6 +645,7 @@ class Visualizer(ctk.CTk):
 
         key = self.mode_var_lbl_source.get()
 
+
         if self.predictions[key] is None:
             messagebox.showinfo("Error", f"The selected directory does not contain prediction files for {key}.", parent=self.master)
             self.mode_var_lbl_source.set(self.mode_var_lbl_source_prev)
@@ -659,7 +660,9 @@ class Visualizer(ctk.CTk):
             self.crop_resize()
             self.Overlay()
             self.display_image()
-        
+
+        self.reset_annotation()
+
         return 1
 
 
@@ -832,9 +835,12 @@ class Visualizer(ctk.CTk):
     # Operations
     
     def show_evaluation_panel(self):
+        ann_flag = True
         if self.annotation_window.winfo_viewable():
-            self.close_annotation_panel()
-
+            ann_flag = self.close_annotation_panel()
+        if not ann_flag:
+            return
+        
         if self.evaluation_panel.scene_name != self.scene_name:
             self.evaluation_panel.set_scene_name(self.scene_name)
         
@@ -842,8 +848,11 @@ class Visualizer(ctk.CTk):
         self.evaluation_window.focus_force()
     
     def show_annotation_panel(self):
+        eva_flag = True
         if self.evaluation_window.winfo_viewable():
-            self.close_evaluation_panel()
+            eva_flag = self.close_evaluation_panel()
+        if not eva_flag:
+            return
         
         self.annotation_window.deiconify()
         self.annotation_window.focus_force()
@@ -1090,9 +1099,18 @@ class Visualizer(ctk.CTk):
                     pass
 
     def on_close(self):
-        if self.close_evaluation_panel() and \
-           self.close_annotation_panel():
+
+        ann_flag = True
+        if self.annotation_window.winfo_viewable():
+            ann_flag = self.close_annotation_panel()
+
+        eva_flag = True
+        if self.evaluation_window.winfo_viewable():
+            eva_flag = self.close_evaluation_panel()
+        
+        if ann_flag and eva_flag:
             self.destroy()
+
 
 if __name__ == '__main__':
 
