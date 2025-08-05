@@ -663,6 +663,9 @@ class Visualizer(ctk.CTk):
 
         self.reset_annotation()
 
+        if self.evaluation_window.winfo_viewable():
+            self.evaluation_panel.load_existing_evaluation()
+
         return 1
 
 
