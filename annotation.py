@@ -251,7 +251,10 @@ class AnnotationPanel(ctk.CTkFrame):
         
         file_path = self.command_parent.filenames[list(self.command_parent.predictions).index(key)]
         os.makedirs(os.path.split(file_path)[0], exist_ok=True)
-        Image.fromarray(self.command_parent.predictions[key]).save(file_path)
+        img = self.command_parent.predictions[key].copy()
+        img[(img == [0, 255, 255]).all(axis=2)] = [0, 0, 128]
+        img[(img == [255, 130, 0]).all(axis=2)] = [128, 0, 0]
+        Image.fromarray(img).save(file_path)
 
         # mark as saved
         self.command_parent.lbl_source_buttom[key].configure(text=key)

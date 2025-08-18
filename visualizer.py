@@ -433,17 +433,8 @@ class Visualizer(ctk.CTk):
 
     def Choose_SAR_scene(self):
 
-        if self.evaluation_panel.unsaved_changes:
-            result = messagebox.askyesnocancel("Unsaved Changes", "You have unsaved evaluation data. Do you want to save before loading a new scene?", 
-                                               parent=self.master)
-            if result is None:  # Cancel
-                return
-            elif result:
-                self.evaluation_panel.save_evaluation()
-                if self.evaluation_panel.unsaved_changes:
-                    return
-                # self.evaluation_panel._show_silent_popup("Saved", "Evaluation has been saved.")
-
+        self.close_evaluation_panel()
+        self.close_annotation_panel()
         
         prev_folder_path = self.folder_path
 
@@ -884,20 +875,21 @@ class Visualizer(ctk.CTk):
                     return  0   # Failed to save → don't close
         
         # Remove custom annotation from seg sources
-        for i in range(len(self.lbl_source)):
-            if self.lbl_source[i] == 'Custom_Annotation':
-                self.lbl_source.pop(i)
-                break
-        for key in self.lbl_source_buttom.keys():
-            self.lbl_source_buttom[key].destroy()
-        self.lbl_source_buttom = {}
-        self.mode_var_lbl_source = None
-        self.mode_var_lbl_source_prev = None
+        if "Custom_Annotation" in self.lbl_source:
+            for i in range(len(self.lbl_source)):
+                if self.lbl_source[i] == 'Custom_Annotation':
+                    self.lbl_source.pop(i)
+                    break
+            for key in self.lbl_source_buttom.keys():
+                self.lbl_source_buttom[key].destroy()
+            self.lbl_source_buttom = {}
+            self.mode_var_lbl_source = None
+            self.mode_var_lbl_source_prev = None
 
-        for i, lbl_s in enumerate(self.lbl_source):
-            self.update_label_source_widgets(lbl_s, i)
-        
-        self.Choose_lbl_source()
+            for i, lbl_s in enumerate(self.lbl_source):
+                self.update_label_source_widgets(lbl_s, i)
+            
+            self.Choose_lbl_source()
 
         self.reset_annotation()
         self.annotation_window.withdraw()
@@ -1078,11 +1070,11 @@ class Visualizer(ctk.CTk):
         # Reset variables
         self.reset_annotation()
 
-    def label_ice(self):
-        self.annotate_class([128, 0, 0])
-
     def label_water(self):
-        self.annotate_class([0, 0, 128])
+        self.annotate_class([0, 255, 255])
+
+    def label_ice(self):
+        self.annotate_class([255, 130, 0])
 
 
     # Misc
