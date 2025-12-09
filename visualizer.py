@@ -60,7 +60,6 @@ def get_segment_contours(pred, x, y):
 class Visualizer(ctk.CTk):
 
     def __init__(self):
-
         super().__init__()
 
         # ==================== GUI DESIGN
@@ -73,7 +72,7 @@ class Visualizer(ctk.CTk):
 
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
-        # Use 75% of screen size, for example
+        # Use 80% of screen size
         window_width = int(screen_width * 0.80)
         window_height = int(screen_height * 0.80)
         self.geometry(f"{window_width}x{window_height}")
@@ -97,10 +96,21 @@ class Visualizer(ctk.CTk):
         # Pan state
         self.select_start = None
 
-        #%% Canvas
-        self.canvas = Canvas(self, bg='black')
-        self.canvas.pack(fill=tk.BOTH, expand=True)
+        # ==================== LAYOUT: SIDEBAR (LEFT) + CANVAS (RIGHT)
 
+        # Main container holds sidebar and canvas
+        self.main_container = ctk.CTkFrame(self)
+        self.main_container.pack(fill="both", expand=True)
+
+        # Left sidebar for controls
+        self.sidebar = ctk.CTkFrame(self.main_container, width=260)
+        self.sidebar.pack(side="left", fill="y")
+
+        # Canvas on the right
+        self.canvas = Canvas(self.main_container, bg="black")
+        self.canvas.pack(side="right", fill="both", expand=True)
+
+        # Canvas bindings
         self.canvas.bind("<MouseWheel>", self._on_mousewheel)  # Windows
         self.canvas.bind("<Button-4>", self._on_mousewheel)    # Linux scroll up
         self.canvas.bind("<Button-5>", self._on_mousewheel)    # Linux scroll down
@@ -112,67 +122,98 @@ class Visualizer(ctk.CTk):
         self.canvas.bind("<Button-3>", self.on_right_click)
         self.canvas.bind("<Double-Button-1>", self.on_double_click)
 
-        # Create a bottom container to hold control frames
-        self.bottom_container = ctk.CTkFrame(self)
-        self.bottom_container.pack(side=tk.BOTTOM, fill=tk.X)
 
-        #%% Visualization panel
-        self.control_frame = ctk.CTkFrame(self.bottom_container)
-        self.control_frame.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        # ==================== CONTROL PANELS (STACKED VERTICALLY)
+
+        #%% Visualization panel (scene/channel/opacity/zoom)
+        self.control_frame = ctk.CTkFrame(self.sidebar)
+        self.control_frame.pack(fill="x", padx=5, pady=5)
 
         # Image selection frame
         self.select_image_frame = ctk.CTkFrame(self.control_frame)
-        self.select_image_frame.grid(row=0, column=0, padx=5)
+        self.select_image_frame.grid(row=0, column=0, padx=5, pady=(0, 5), sticky="nwe")
 
         # Choose SAR scene
-        self.Choose_SAR_scene_toggle_btn = ctk.CTkButton(self.select_image_frame, text=f"Choose SAR scene", command=self.Choose_SAR_scene)
-        self.Choose_SAR_scene_toggle_btn.grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=5)
+        self.Choose_SAR_scene_toggle_btn = ctk.CTkButton(
+            self.select_image_frame,
+            text="Choose SAR scene",
+            command=self.Choose_SAR_scene
+        )
+        self.Choose_SAR_scene_toggle_btn.grid(row=0, column=0, columnspan=2,
+                                            sticky="w", padx=5, pady=5)
 
         # Choose channel (Switch)
-        ctk.CTkLabel(self.select_image_frame, 
-                     text="HH/HV").grid(row=1, column=0, sticky="e", padx=5, pady=5)
-        self.HH_HV_switch = ctk.CTkSwitch(self.select_image_frame, text="", command=self.HH_HV)
+        ctk.CTkLabel(self.select_image_frame, text="HH/HV").grid(
+            row=1, column=0, sticky="e", padx=5, pady=5
+        )
+        self.HH_HV_switch = ctk.CTkSwitch(
+            self.select_image_frame,
+            text="",
+            command=self.HH_HV
+        )
         self.HH_HV_switch.grid(row=1, column=1, sticky="w", padx=5, pady=5)
 
         # Better Contrast ON/OFF
-        ctk.CTkLabel(self.select_image_frame, text="Better contrast").grid(row=2, column=0, sticky="e", padx=5, pady=5)
+        ctk.CTkLabel(self.select_image_frame, text="Better contrast").grid(
+            row=2, column=0, sticky="e", padx=5, pady=5
+        )
 
         self.Better_contrast_toggle_state = True
         state = "ON" if self.Better_contrast_toggle_state else "OFF"
-        self.Better_contrast_toggle_btn = ctk.CTkButton(self.select_image_frame, text=state, 
-                                                    width=19,
-                                                    command=self.Better_contrast_toggle)
+        self.Better_contrast_toggle_btn = ctk.CTkButton(
+            self.select_image_frame,
+            text=state,
+            width=19,
+            command=self.Better_contrast_toggle
+        )
         self.Better_contrast_toggle_btn.grid(row=2, column=1, sticky="w", padx=5, pady=5)
         self.default_fg_color = self.Better_contrast_toggle_btn.cget("fg_color")
         self.default_hover_color = self.Better_contrast_toggle_btn.cget("hover_color")
-        self.default_text_color = self.Better_contrast_toggle_btn.cget("text_color")        
+        self.default_text_color = self.Better_contrast_toggle_btn.cget("text_color")
 
-        # Opacity slider
+        # Opacity + segmentation controls in same block
         self.Segmentation_frame = ctk.CTkFrame(self.control_frame)
-        self.Segmentation_frame.grid(row=0, column=1, padx=5)
+        self.Segmentation_frame.grid(row=1, column=0, padx=5, pady=5, sticky="nwe")
 
         self.Opacity_slider_value = 50  # Initial value
-        ctk.CTkLabel(self.Segmentation_frame, 
-                     text="Opacity").grid(row=0, column=0, sticky='e', padx=5, pady=5)
-        self.slider = ctk.CTkSlider(self.Segmentation_frame,
-                                    from_=0, to=100,
-                                    number_of_steps=20,
-                                    width=100,
-                                    command=self.Opacity_slider)
+        ctk.CTkLabel(self.Segmentation_frame, text="Opacity").grid(
+            row=0, column=0, sticky="e", padx=5, pady=5
+        )
+        self.slider = ctk.CTkSlider(
+            self.Segmentation_frame,
+            from_=0,
+            to=100,
+            number_of_steps=20,
+            width=100,
+            command=self.Opacity_slider
+        )
         self.slider.set(self.Opacity_slider_value)  # Set initial value
-        self.slider.grid(row=0, column=1, pady=5)
+        self.slider.grid(row=0, column=1, pady=5, padx=5, sticky="w")
 
         # Classes ON/OFF
-        ctk.CTkLabel(self.Segmentation_frame, text="Ice/Water Labels").grid(row=2, column=0, sticky='e', padx=5, pady=5)
+        ctk.CTkLabel(self.Segmentation_frame, text="Ice/Water Labels").grid(
+            row=1, column=0, sticky="e", padx=5, pady=5
+        )
         self.Segmentation_toggle_state = True
         state = "ON" if self.Segmentation_toggle_state else "OFF"
-        self.Segmentation_toggle_btn = ctk.CTkButton(self.Segmentation_frame, text=state, width=19, command=self.Segmentation_toggle)
-        self.Segmentation_toggle_btn.grid(row=2, column=1, sticky='w', padx=5, pady=5)
-        
-        # Zoom selection button
+        self.Segmentation_toggle_btn = ctk.CTkButton(
+            self.Segmentation_frame,
+            text=state,
+            width=19,
+            command=self.Segmentation_toggle
+        )
+        self.Segmentation_toggle_btn.grid(row=1, column=1, sticky="w", padx=5, pady=5)
+
+        # Zoom controls
         self.zoom_frame = ctk.CTkFrame(self.control_frame)
-        self.zoom_frame.grid(row=0, column=2, padx=5)
-        self.zoom_select_btn = ctk.CTkButton(self.zoom_frame, text="Zoom to Selection Mode", width=166, command=self.enable_zoom_selection)
+        self.zoom_frame.grid(row=2, column=0, padx=5, pady=5, sticky="nwe")
+
+        self.zoom_select_btn = ctk.CTkButton(
+            self.zoom_frame,
+            text="Zoom to Selection Mode",
+            width=166,
+            command=self.enable_zoom_selection
+        )
         self.zoom_select_btn.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
 
         self.zoom_btn_default_style = {     # store default style
@@ -189,40 +230,46 @@ class Visualizer(ctk.CTk):
         }
 
         # Reset zoom button
-        reset_btn = ctk.CTkButton(self.zoom_frame, text="Reset Zoom", command=self.reset_zoom)
+        reset_btn = ctk.CTkButton(
+            self.zoom_frame,
+            text="Reset Zoom",
+            command=self.reset_zoom
+        )
         reset_btn.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
-        #%% Segmentation source
-        self.lbl_source_frame = ctk.CTkFrame(self.bottom_container)
-        self.lbl_source_frame.grid(row=0, column=1, sticky="e", padx=5, pady=5)
-        ctk.CTkLabel(self.lbl_source_frame, 
-                     text="Seg Source").grid(row=0, column=0, sticky="nsew", pady=5)
+        #%% Segmentation source (second block in sidebar)
+        self.lbl_source_frame = ctk.CTkFrame(self.sidebar)
+        self.lbl_source_frame.pack(fill="x", padx=5, pady=5)
+
+        ctk.CTkLabel(self.lbl_source_frame, text="Seg Source").grid(
+            row=0, column=0, sticky="nsew", pady=5
+        )
 
         self.lbl_source = [
-            'Unet+ITT_pixel', 
-            # 'Unet+ITT_pixel+MV', 
-            'Unet+ITT_region', 
-            # 'Results_Major'
-            ]
+            "Unet+ITT_pixel",
+            # "Unet+ITT_pixel+MV",
+            "Unet+ITT_region",
+            # "Results_Major"
+        ]
         filenames_ = [
-                "colored_predict_cnn.png",
-                # "CNN_colored_m_v_per_CC.png",
-                "colored_predict_transformer.png",
-                # "resnet.png"
-                ]
-        self.filenames = ["/{}/{}".format(lbl_s, file) for lbl_s, file in zip(self.lbl_source, filenames_)]
+            "colored_predict_cnn.png",
+            # "CNN_colored_m_v_per_CC.png",
+            "colored_predict_transformer.png",
+            # "resnet.png"
+        ]
+        self.filenames = ["/{}/{}".format(lbl_s, file)
+                        for lbl_s, file in zip(self.lbl_source, filenames_)]
         self.lbl_source_buttom = {}
         self.mode_var_lbl_source = None
         self.mode_var_lbl_source_prev = None
+
         # Radio buttons for explicit selection
         for i, lbl_s in enumerate(self.lbl_source):
             self.update_label_source_widgets(lbl_s, i)
 
-
-        #%% Operations
-            
-        self.operation_frame = ctk.CTkFrame(self.bottom_container)
-        self.operation_frame.grid(row=0, column=2, sticky="e", padx=5, pady=5)
+        #%% Operations (third block in sidebar)
+        self.operation_frame = ctk.CTkFrame(self.sidebar)
+        self.operation_frame.pack(fill="x", padx=5, pady=5)
 
         # # # Evaluation panel
         self.evaluation_window = ctk.CTkToplevel(self)
@@ -230,14 +277,19 @@ class Visualizer(ctk.CTk):
         self.evaluation_window.attributes("-topmost", True)  # Always on top
         self.evaluation_window.title("Evaluation Panel")
         self.evaluation_window.withdraw()  # Hide the window at start
-        self.evaluation_window.protocol("WM_DELETE_WINDOW", self.close_evaluation_panel) # Hide window instead of destroying it on close
+        self.evaluation_window.protocol(
+            "WM_DELETE_WINDOW",
+            self.close_evaluation_panel
+        )  # Hide window instead of destroying it on close
 
         self.evaluation_panel = EvaluationPanel(self.evaluation_window, self)
         self.evaluation_panel.pack(fill="both", expand=True, padx=10, pady=10)
 
-        ctk.CTkButton(self.operation_frame, text="Evaluation", 
-                      command=self.show_evaluation_panel) .grid(row=0, column=0, sticky="nsew", 
-                                                                padx=5, pady=5)
+        ctk.CTkButton(
+            self.operation_frame,
+            text="Evaluation",
+            command=self.show_evaluation_panel
+        ).grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
 
         # # # Annotation panel
         self.annotation_window = ctk.CTkToplevel(self)
@@ -245,21 +297,38 @@ class Visualizer(ctk.CTk):
         self.annotation_window.attributes("-topmost", True)  # Always on top
         self.annotation_window.title("Annotation Panel")
         self.annotation_window.withdraw()  # Hide the window at start
-        self.annotation_window.protocol("WM_DELETE_WINDOW", self.close_annotation_panel) # Hide window instead of destroying it on close
+        self.annotation_window.protocol(
+            "WM_DELETE_WINDOW",
+            self.close_annotation_panel
+        )  # Hide window instead of destroying it on close
 
         self.annotation_panel = AnnotationPanel(self.annotation_window, self)
         self.annotation_panel.pack(fill="both", expand=True, padx=10, pady=10)
 
-        ctk.CTkButton(self.operation_frame, text="Annotation", 
-                      command=self.show_annotation_panel).grid(row=1, column=0, sticky="nsew", 
-                                                               padx=5, pady=5)
+        ctk.CTkButton(
+            self.operation_frame,
+            text="Annotation",
+            command=self.show_annotation_panel
+        ).grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
-        #%% INITIAL VISUALIZATION
-        self.folder_path = ''
+        # Layout behavior inside bottom_container
+        self.sidebar.grid_rowconfigure(0, weight=0)
+        self.sidebar.grid_rowconfigure(1, weight=0)
+        self.sidebar.grid_rowconfigure(2, weight=1)
+        self.sidebar.grid_columnconfigure(0, weight=1)
+
+        #%% INITIAL VISUALIZATION / STATE
+        self.folder_path = ""
         self.alpha = 0.5
         self.channel = 0
-        
-        self._set_all_children_enabled(self.bottom_container, False, exclude=[self.Choose_SAR_scene_toggle_btn])
+
+        # Disable everything until SAR scene is chosen
+        self._set_all_children_enabled(
+            self.sidebar,
+            False,
+            exclude=[self.Choose_SAR_scene_toggle_btn]
+        )
+
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(500, self.Choose_SAR_scene)
 
@@ -464,7 +533,7 @@ class Visualizer(ctk.CTk):
             self.update_idletasks()
             self.after(100, self.reset_zoom)    # Delay the initial reset call with .after() so the canvas has its final size:
             
-            self._set_all_children_enabled(self.bottom_container, True)
+            self._set_all_children_enabled(self.sidebar, True)
 
         else:
             self.folder_path = prev_folder_path
