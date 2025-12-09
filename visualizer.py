@@ -103,8 +103,9 @@ class Visualizer(ctk.CTk):
         self.main_container.pack(fill="both", expand=True)
 
         # Left sidebar for controls
-        self.sidebar = ctk.CTkFrame(self.main_container, width=260)
-        self.sidebar.pack(side="left", fill="y")
+        self.sidebar = ctk.CTkFrame(self.main_container, width=200)
+        self.sidebar.pack(side="left", fill="y", padx=0, pady=0)
+        self.sidebar.pack_propagate(False)  # Prevent sidebar from resizing to fit contents
 
         # Canvas on the right
         self.canvas = Canvas(self.main_container, bg="black")
@@ -141,11 +142,28 @@ class Visualizer(ctk.CTk):
         )
         self.Choose_SAR_scene_toggle_btn.grid(row=0, column=0, columnspan=2,
                                             sticky="w", padx=5, pady=5)
+        
+        # Color composite selection
+        self.mode_var_color_composite = ctk.StringVar(value="(HH, HH, HV)")  # Default selection
+        HH_HV = ctk.CTkRadioButton(self.select_image_frame,
+                                      text="(HH/HV)", 
+                                      variable=self.mode_var_color_composite,
+                                      value="(HH/HV)", 
+                                      command=self.Color_composite)
+        HH_HH_HV = ctk.CTkRadioButton(self.select_image_frame,
+                                      text="(HH, HH, HV)", 
+                                      variable=self.mode_var_color_composite,
+                                      value="(HH, HH, HV)", 
+                                      command=self.Color_composite)
+        HH_HV_HV = ctk.CTkRadioButton(self.select_image_frame,
+                                      text="(HH, HV, HV)", 
+                                      variable=self.mode_var_color_composite,
+                                      value="(HH, HV, HV)", 
+                                      command=self.Color_composite)
+        HH_HV.grid(   row=1, column=0, sticky="w", pady=(10, 10))
+        HH_HH_HV.grid(row=2, column=0, sticky="w", pady=(10, 10), columnspan=2)
+        HH_HV_HV.grid(row=3, column=0, sticky="w", pady=(10, 10), columnspan=2)
 
-        # Choose channel (Switch)
-        ctk.CTkLabel(self.select_image_frame, text="HH/HV").grid(
-            row=1, column=0, sticky="e", padx=5, pady=5
-        )
         self.HH_HV_switch = ctk.CTkSwitch(
             self.select_image_frame,
             text="",
@@ -155,7 +173,7 @@ class Visualizer(ctk.CTk):
 
         # Better Contrast ON/OFF
         ctk.CTkLabel(self.select_image_frame, text="Better contrast").grid(
-            row=2, column=0, sticky="e", padx=5, pady=5
+            row=4, column=0, sticky="e", padx=5, pady=5
         )
 
         self.Better_contrast_toggle_state = True
@@ -166,7 +184,7 @@ class Visualizer(ctk.CTk):
             width=19,
             command=self.Better_contrast_toggle
         )
-        self.Better_contrast_toggle_btn.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        self.Better_contrast_toggle_btn.grid(row=4, column=1, sticky="w", padx=5, pady=5)
         self.default_fg_color = self.Better_contrast_toggle_btn.cget("fg_color")
         self.default_hover_color = self.Better_contrast_toggle_btn.cget("hover_color")
         self.default_text_color = self.Better_contrast_toggle_btn.cget("text_color")
@@ -320,7 +338,10 @@ class Visualizer(ctk.CTk):
         #%% INITIAL VISUALIZATION / STATE
         self.folder_path = ""
         self.alpha = 0.5
-        self.channel = 0
+        
+        self.channels = self.mode_var_color_composite.get()
+        if self.channels == "(HH/HV)":
+            self.channels = "HV" if self.HH_HV_switch.get() else "HH"
 
         # Disable everything until SAR scene is chosen
         self._set_all_children_enabled(
@@ -348,15 +369,30 @@ class Visualizer(ctk.CTk):
         self.lbl_source_buttom[lbl_source].grid(row=i+1, column=0, sticky="w", pady=(10, 10))
 
     def Load_Images(self):
-        try:
-            self.img_ = [np.tile(np.asarray(Image.open(self.folder_path + "/imagery_HH_UW_4_by_4_average.tif"))[:,:,np.newaxis], (1,1,3)), 
-                        np.tile(np.asarray(Image.open(self.folder_path + "/imagery_HV_UW_4_by_4_average.tif"))[:,:,np.newaxis], (1,1,3))]
 
-            self.img_Better_contrast = [np.tile(np.asarray(Image.open(self.folder_path + "/enhanced_images/imagery_HH_UW_4_by_4_average.png"))[:,:,np.newaxis], (1,1,3)),
-                                        np.tile(np.asarray(Image.open(self.folder_path + "/enhanced_images/imagery_HV_UW_4_by_4_average.png"))[:,:,np.newaxis], (1,1,3))]
+        try:
+            HH = np.asarray(Image.open(self.folder_path + "/imagery_HH_UW_4_by_4_average.tif")) 
+            HV = np.asarray(Image.open(self.folder_path + "/imagery_HV_UW_4_by_4_average.tif"))
+
+            HH_better_contrast = np.asarray(Image.open(self.folder_path + "/enhanced_images/imagery_HH_UW_4_by_4_average.png"))
+            HV_better_contrast = np.asarray(Image.open(self.folder_path + "/enhanced_images/imagery_HV_UW_4_by_4_average.png"))
+
         except FileNotFoundError as e:
             messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{e}", parent=self.master)
             return 0
+
+        self.img_ = {}
+        self.img_["HH"] = np.tile(HH[:,:,np.newaxis], (1,1,3))
+        self.img_["HV"] = np.tile(HV[:,:,np.newaxis], (1,1,3))
+        self.img_["(HH, HH, HV)"] = np.stack([HH, HH, HV], axis=-1)
+        self.img_["(HH, HV, HV)"] = np.stack([HH, HV, HV], axis=-1)
+
+        self.img_Better_contrast = {}
+        self.img_Better_contrast["HH"] = np.tile(HH_better_contrast[:,:,np.newaxis], (1,1,3))
+        self.img_Better_contrast["HV"] = np.tile(HV_better_contrast[:,:,np.newaxis], (1,1,3))
+        self.img_Better_contrast["(HH, HH, HV)"] = np.stack([HH_better_contrast, HH_better_contrast, HV_better_contrast], axis=-1)
+        self.img_Better_contrast["(HH, HV, HV)"] = np.stack([HH_better_contrast, HV_better_contrast, HV_better_contrast], axis=-1)
+
         return 1
 
     def Load_pred(self):
@@ -434,9 +470,9 @@ class Visualizer(ctk.CTk):
 
     def Choose_image(self):
         if self.Better_contrast_toggle_state:
-            self.img = self.img_Better_contrast[self.channel]
+            self.img = self.img_Better_contrast[self.channels]
         else:
-            self.img = self.img_[self.channel]
+            self.img = self.img_[self.channels]
 
     def display_image(self):
         image = self.overlay if self.Segmentation_toggle_state else self.img_resized.astype('uint8')
@@ -520,7 +556,7 @@ class Visualizer(ctk.CTk):
 
             self.scene_name = self.folder_path.split('/')[-1]
 
-            self.title(f"Scene {self.scene_name}-{"HV" if self.channel else "HH"}")
+            self.title(f"Scene {self.scene_name}-{self.channels}")
             if not self.Load_Images(): 
                 self.folder_path = ''
                 return
@@ -534,29 +570,21 @@ class Visualizer(ctk.CTk):
             self.after(100, self.reset_zoom)    # Delay the initial reset call with .after() so the canvas has its final size:
             
             self._set_all_children_enabled(self.sidebar, True)
+            if self.channels in ["(HH, HH, HV)", "(HH, HV, HV)"]:
+                self.HH_HV_switch.configure(state=ctk.DISABLED)
 
         else:
             self.folder_path = prev_folder_path
 
-    def HH_HV(self):
-        self.channel = 1 if self.HH_HV_switch.get() else 0
+    def Color_composite(self):
+        self.channels = self.mode_var_color_composite.get()
 
-        self.title(f"Scene {self.scene_name}-{"HV" if self.channel else "HH"}")
-        
-        self.Choose_image()
-
-        self.crop_resize()
-        self.Overlay()
-        self.display_image()
-
-        if self.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
-        
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.update_zoomed_display()
+        if self.channels == "(HH/HV)":
+            self.HH_HV_switch.configure(state=ctk.NORMAL)
+            self.HH_HV(get_channel=True)
+        else:
+            self.HH_HV_switch.configure(state=ctk.DISABLED)
+            self.HH_HV(get_channel=False)
 
     def Better_contrast_toggle(self):
         self.Better_contrast_toggle_state = not self.Better_contrast_toggle_state
@@ -578,6 +606,14 @@ class Visualizer(ctk.CTk):
                 text_color="white"
             )
 
+        self.HH_HV(get_channel=False)
+        
+    def HH_HV(self, get_channel=True):
+
+        if get_channel:
+            self.channels = "HV" if self.HH_HV_switch.get() else "HH"
+
+        self.title(f"Scene {self.scene_name}-{self.channels}")
         self.Choose_image()
 
         self.crop_resize()
