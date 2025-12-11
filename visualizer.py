@@ -981,10 +981,15 @@ class Visualizer(ctk.CTk):
         
         # Remove custom annotation from seg sources
         if "Custom_Annotation" in self.lbl_source:
+
+            for i in range(len(self.filenames)):
+                if "Custom_Annotation" in self.filenames[i]:
+                    self.filenames.pop(i)
+
             for i in range(len(self.lbl_source)):
                 if self.lbl_source[i] == 'Custom_Annotation':
                     self.lbl_source.pop(i)
-                    break
+
             for key in self.lbl_source_buttom.keys():
                 self.lbl_source_buttom[key].destroy()
             self.lbl_source_buttom = {}
