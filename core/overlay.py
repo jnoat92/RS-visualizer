@@ -1,0 +1,64 @@
+import customtkinter as ctk
+import tkinter as tk
+from tkinter import Canvas, filedialog, messagebox
+from PIL import Image, ImageTk
+import numpy as np
+from skimage.measure import find_contours, label
+
+from skimage.morphology import binary_dilation, disk
+from ui.evaluation import EvaluationPanel
+from ui.annotation import AnnotationPanel
+from utils import blend_overlay_cuda, blend_overlay, rgb2gray
+from utils import generate_boundaries
+
+from numba import cuda
+import cv2
+import os
+from parallel_stuff import Parallel
+import multiprocessing
+
+    # Display handle
+
+def overlay_GPU(pred, img, boundmask, landmask, alpha):
+    # Using Numba on the GPU to parallelize 
+    h, w, c = pred.shape
+    pred = pred.astype(np.float32)
+    img = img.astype(np.float32)
+
+    d_pred = cuda.to_device(pred)
+    d_img = cuda.to_device(img)
+    d_boundmask = cuda.to_device(boundmask)
+    d_landmask = cuda.to_device(landmask)
+    d_out = cuda.device_array((h, w, c), dtype=np.float32)
+
+    threadsperblock = (16, 16)
+    blockspergrid_x = (w + threadsperblock[1] - 1) // threadsperblock[1]
+    blockspergrid_y = (h + threadsperblock[0] - 1) // threadsperblock[0]
+    blockspergrid = (blockspergrid_y, blockspergrid_x)
+
+    blend_overlay_cuda[blockspergrid, threadsperblock](d_pred, d_img, d_boundmask, d_landmask, alpha, d_out)
+
+    blended = d_out.copy_to_host()
+    # self.overlay = blended.astype(np.uint8)
+    return blended.astype(np.uint8)
+
+def overlay(pred, img, boundmask, landmask, alpha):
+
+    # alpha = self.alpha
+    # beta = 1 - alpha
+    # overlay = alpha * self.pred_resized + beta * self.img_resized
+    # overlay = np.where(self.boundmask_resized[..., None], self.pred_resized, overlay)
+    # overlay = np.where(self.landmask_resized[..., None], 255, overlay)        # Use float32 for fast computation
+
+    # Using Numba on the CPU to parallelize 
+    pred = pred.astype(np.float32)
+    img = img.astype(np.float32)
+    overlay = blend_overlay(pred, img, boundmask, landmask, alpha)
+
+    return overlay.astype(np.uint8)
+
+def compose_overlay(pred, img, boundmask, landmask, alpha, use_gpu=False):
+    if use_gpu:
+        return overlay_GPU(pred, img, boundmask, landmask, alpha)
+    else:
+        return overlay(pred, img, boundmask, landmask, alpha)
