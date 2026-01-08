@@ -308,7 +308,7 @@ class Visualizer(ctk.CTk):
         self.sidebar.grid_columnconfigure(0, weight=1)
 
         #%% INITIAL VISUALIZATION / STATE
-        self.folder_path = ""
+        self.app_state.scene.folder_path = ""
         self.alpha = 0.5
         
         self.channels = self.mode_var_color_composite.get()
@@ -342,11 +342,13 @@ class Visualizer(ctk.CTk):
 
     def Load_pred(self):
 
+        scene = self.app_state.scene
+
         self.predictions = {}
         self.landmasks = {}
         self.boundmasks = {}
 
-        variables = load_prediction(self.folder_path, self.filenames, self.lbl_source)
+        variables = load_prediction(scene.folder_path, self.filenames, self.lbl_source)
         
         # variables = [PredictionLoader(it) for it in zip(lbl_source, filenames)]
         
@@ -404,31 +406,33 @@ class Visualizer(ctk.CTk):
 
     def Choose_SAR_scene(self):
 
+        scene = self.app_state.scene
+
         self.close_evaluation_panel()
         self.close_annotation_panel()
         
-        prev_folder_path = self.folder_path
+        prev_folder_path = scene.folder_path
 
         root = ctk.CTk()
         root.withdraw()
-        self.folder_path = filedialog.askdirectory(initialdir=os.path.dirname(prev_folder_path) if self.folder_path else os.getcwd(),
+        scene.folder_path = filedialog.askdirectory(initialdir=os.path.dirname(prev_folder_path) if scene.folder_path else os.getcwd(),
                                                    title='Select the dated directory containing HH/HV and segmentation results')
         root.destroy()
 
-        if self.folder_path:
+        if scene.folder_path:
 
-            if self.folder_path == prev_folder_path:
+            if scene.folder_path == prev_folder_path:
                 return
 
-            self.scene_name = self.folder_path.split('/')[-1]
+            self.scene_name = scene.folder_path.split('/')[-1]
 
             self.title(f"Scene {self.scene_name}-{self.channels}")
 
-            images = load_images(self.folder_path)
+            images = load_images(scene.folder_path)
             
             if isinstance(images, FileNotFoundError):
                 messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{images}", parent=self.master)
-                self.folder_path = ''
+                scene.folder_path = ''
                 return
             else:
                 self.img_, self.img_Better_contrast = images
@@ -437,7 +441,7 @@ class Visualizer(ctk.CTk):
             self.Choose_image()
             self.Load_pred()
             if not self.Choose_lbl_source(plot=False):
-                self.folder_path = ''
+                scene.folder_path = ''
                 return
             self.update_idletasks()
             self.after(100, self.reset_zoom)    # Delay the initial reset call with .after() so the canvas has its final size:
@@ -447,7 +451,7 @@ class Visualizer(ctk.CTk):
                 self.HH_HV_switch.configure(state=ctk.DISABLED)
 
         else:
-            self.folder_path = prev_folder_path
+            scene.folder_path = prev_folder_path
 
     def Color_composite(self):
         self.channels = self.mode_var_color_composite.get()

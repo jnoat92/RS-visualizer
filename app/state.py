@@ -7,7 +7,7 @@ Last modified: Jan 2026
 import numpy as np
 from dataclasses import dataclass, field
 
-# Data class that houses values that determine the orientation of the image
+# Data class that houses values that when changed requires a refresh_view()
 @dataclass(slots=True)
 class ViewState:
     zoom_factor: float = 1.0
@@ -15,6 +15,15 @@ class ViewState:
     max_zoom: float = 10.0
     offset_x: float = 0.0
     offset_y: float = 0.0
+
+    # Keep track of pan interaction
+    is_panning: bool = False
+    pan_start_screen: tuple[int, int] = None
+
+    # Selection zoom
+    selection_rect_id: int = None
+    selection_start_screen: tuple[int, int] = None
+
 
 # Data class that houses the currently loaded scene and everything tied to that data
 @dataclass(slots=True)
@@ -41,23 +50,39 @@ class SceneState:
 # Data class that houses values that affect the base image pixels before overlay
 @dataclass(slots=True)
 class DisplaySettings:
-    brightness: float = 1.0
-    contrast: float = 1.0
-    gamma: float = 1.0
+    brightness: float = 1.0 # Placeholder for later
+    contrast: float = 1.0 # Placeholder for later
+    gamma: float = 1.0 # Placeholder for later
     clip: bool = True
 
 # Data class for values that impact the overlay
 @dataclass(slots=True)
 class OverlaySettings:
-    opacity: float = 0.0
+    alpha: float = 0.35
+    show_overlay: bool = True
+    show_boundaries: bool = True
+    show_landmask: bool = False
+    use_gpu: bool = False # CPU quicker based on tests to update overlay
 
 # Data class for annotation functions
 @dataclass(slots=True)
 class AnnotationState:
-    annotation_mode: str = ""
-    polygon_points_img_coor: list = field(default_factory=list)
-    selected_polygon_window: tuple = None
-    selected_polygon_area_idx: tuple = None
+    annotation_mode: str = "none"
+    active_label: str = "water"
+
+    # Drawing points
+    draft_points_img: list[tuple[int, int]] = field(default_factory=list)
+
+    # Select created polygon
+    selected_id: str = ""
+    hovered_id: str = ""
+
+    # Saved annotation objects
+    #objects: dict[str, AnnotationObject] = field(default_factory=dict)
+
+    # Zoom window state
+    zoom_window_open: bool = False
+    zoom_bbox_img: tuple[int,int,int,int] = None
 
 @dataclass(slots=True)
 class AppState:
