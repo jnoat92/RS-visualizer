@@ -20,6 +20,7 @@ from utils import generate_boundaries
 from core.io import PredictionLoader, load_images, load_prediction
 from core.segmentation import get_segment_contours
 from core.overlay import compose_overlay
+from core.render import crop_resize
 
 import cv2
 import os
@@ -386,56 +387,15 @@ class Visualizer(ctk.CTk):
         self.canvas.delete("all")
         self.canvas.create_image(self.draw_x, self.draw_y, anchor=tk.NW, image=self.tk_image)
 
-    def crop_resize(self):
-        crop = self.get_zoomed_region(self.pred)
-        if crop is None:
-            return
-
-        view_top, view_bottom, view_left, view_right = crop
-        h, w = self.pred.shape[:2]
-
-        # Clamp values to image bounds
-        view_top = max(0, min(h-1, view_top))
-        view_bottom = max(0, min(h, view_bottom))
-        view_left = max(0, min(w-1, view_left))
-        view_right = max(0, min(w, view_right))
-
-        if view_bottom <= view_top or view_right <= view_left:
-            return  # invalid crop
-
-        pred_crop = self.pred[view_top:view_bottom, view_left:view_right].astype(np.float32)
-        img_crop = self.img[view_top:view_bottom, view_left:view_right].astype(np.float32)
-        boundmask_crop = self.boundmask[view_top:view_bottom, view_left:view_right]
-        landmask_crop = self.landmask[view_top:view_bottom, view_left:view_right]
-
-        # Determine canvas display size
-        zoomed_width = max(1, int((view_right - view_left) * self.zoom_factor))
-        zoomed_height = max(1, int((view_bottom - view_top) * self.zoom_factor))
-
-        self.pred_resized = cv2.resize(pred_crop, (zoomed_width, zoomed_height), interpolation=cv2.INTER_NEAREST)
-        self.img_resized = cv2.resize(img_crop, (zoomed_width, zoomed_height), interpolation=cv2.INTER_LINEAR)
-        self.boundmask_resized = cv2.resize(boundmask_crop.astype(np.uint8), (zoomed_width, zoomed_height), interpolation=cv2.INTER_NEAREST).astype(bool)
-        self.landmask_resized = cv2.resize(landmask_crop.astype(np.uint8), (zoomed_width, zoomed_height), interpolation=cv2.INTER_NEAREST).astype(bool)
-
-        self.boundmask_resized = np.uint8(binary_dilation(self.boundmask_resized.astype('uint8'), np.ones((2,2)).astype('uint8')))
-
-        # Adjust where the image is drawn (canvas position)
-        self.draw_x = int(self.offset_x + view_left * self.zoom_factor)
-        self.draw_y = int(self.offset_y + view_top * self.zoom_factor)
-
-    def get_zoomed_region(self, image):
-        h, w = image.shape[:2]
-        
-        # Image coordinates of the viewport
-        img_left = max(0, int(-self.offset_x / self.zoom_factor))
-        img_top = max(0, int(-self.offset_y / self.zoom_factor))
-        img_right = min(w, int((self.canvas.winfo_width() - self.offset_x) / self.zoom_factor))
-        img_bottom = min(h, int((self.canvas.winfo_height() - self.offset_y) / self.zoom_factor))
-
-        if img_right <= img_left or img_bottom <= img_top:
-            return None
-
-        return img_top, img_bottom, img_left, img_right
+    
+    def refresh_view(self):
+        # NEXT STEP: Group the returns
+        self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, self.draw_x, self.draw_y = crop_resize(
+                    self.pred, self.img, self.boundmask, self.landmask, 
+                    self.zoom_factor, self.offset_x, self.offset_y, 
+                    self.canvas.winfo_width(), self.canvas.winfo_height())
+        self.set_overlay()
+        self.display_image()
 
 
     # Image selection handle
@@ -527,9 +487,7 @@ class Visualizer(ctk.CTk):
         self.title(f"Scene {self.scene_name}-{self.channels}")
         self.Choose_image()
 
-        self.crop_resize()
-        self.set_overlay()
-        self.display_image()
+        self.refresh_view()
 
         if self.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
@@ -614,9 +572,7 @@ class Visualizer(ctk.CTk):
         self.offset_x = int(canvas_width / 2 - center_x * self.zoom_factor)
         self.offset_y = int(canvas_height / 2 - center_y * self.zoom_factor)
 
-        self.crop_resize()
-        self.set_overlay()
-        self.display_image()
+        self.refresh_view()
         if self.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
 
@@ -639,9 +595,7 @@ class Visualizer(ctk.CTk):
         self.offset_x = (canvas_width - new_width) // 2
         self.offset_y = (canvas_height - new_height) // 2
 
-        self.crop_resize()
-        self.set_overlay()
-        self.display_image()
+        self.refresh_view()
         if self.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
 
@@ -664,9 +618,7 @@ class Visualizer(ctk.CTk):
         self.boundmask = self.boundmasks[key].copy()
 
         if plot:
-            self.crop_resize()
-            self.set_overlay()
-            self.display_image()
+            self.refresh_view()
 
         self.reset_annotation()
 
@@ -702,9 +654,7 @@ class Visualizer(ctk.CTk):
         self.offset_x = canvas_x - img_x * self.zoom_factor
         self.offset_y = canvas_y - img_y * self.zoom_factor
 
-        self.crop_resize()
-        self.set_overlay()
-        self.display_image()
+        self.refresh_view()
         if self.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
 
@@ -742,9 +692,7 @@ class Visualizer(ctk.CTk):
             self.offset_y += dy
             self.drag_start = (event.x, event.y)
             
-            self.crop_resize()
-            self.set_overlay()
-            self.display_image()
+            self.refresh_view()
             if self.polygon_points_img_coor: 
                 self.draw_polygon_on_canvas()
 
@@ -1085,9 +1033,7 @@ class Visualizer(ctk.CTk):
         self.landmasks[key] = self.landmask.copy()
         self.boundmasks[key] = self.boundmask.copy()
 
-        self.crop_resize()
-        self.set_overlay()
-        self.display_image()
+        self.refresh_view()
 
         # Reset variables
         self.reset_annotation()

@@ -226,9 +226,8 @@ class AnnotationPanel(ctk.CTkFrame):
             self.command_parent.boundmasks[main_key] = self.command_parent.boundmask.copy()
 
             # Update main display
-            self.command_parent.crop_resize()
-            self.command_parent.set_overlay()
-            self.command_parent.display_image()
+            # Calling refresh_img function from visualzier which consists of crop_resize, set_overlay, display_img
+            self.command_parent.refresh_view()
             if self.command_parent.polygon_points_img_coor: 
                 self.command_parent.draw_polygon_on_canvas()
 
