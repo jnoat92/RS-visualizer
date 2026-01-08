@@ -21,6 +21,7 @@ from core.io import PredictionLoader, load_images, load_prediction
 from core.segmentation import get_segment_contours
 from core.overlay import compose_overlay
 from core.render import crop_resize
+from app.state import AppState
 
 import cv2
 import os
@@ -32,6 +33,7 @@ class Visualizer(ctk.CTk):
     def __init__(self):
         super().__init__()
 
+        self.app_state = AppState()
         # ==================== GUI DESIGN
 
         # ------- Visualizer settings
