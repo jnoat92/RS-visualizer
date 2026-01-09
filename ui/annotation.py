@@ -16,6 +16,7 @@ import numpy as np
 import cv2
 from utils import blend_overlay, generate_boundaries, rgb2gray
 from core.io import resource_path
+from app.state import AppState
 
 class AnnotationPanel(ctk.CTkFrame):
     def __init__(self, parent, command_parent=None):
@@ -25,6 +26,7 @@ class AnnotationPanel(ctk.CTkFrame):
         if command_parent is None:
             command_parent = self
         self.command_parent = command_parent
+        self.app_state = command_parent.app_state
 
         # Drawing tools frame
         self.drawing_frame = ctk.CTkFrame(self)
@@ -119,22 +121,25 @@ class AnnotationPanel(ctk.CTkFrame):
 
     def update_zoomed_display(self):
         """Update the zoomed visualization based on current settings."""
+        scene = self.app_state.scene
+
+        # Current source not custom annotation
         key = self.zoom_mode_var_lbl_source.get()
-        if key not in self.command_parent.predictions:
+        if key not in scene.predictions:
             return
 
         # Get the selected region
         img_y_min, img_y_max, img_x_min, img_x_max = self.command_parent.selected_polygon_window
         img_y_min = max(0, img_y_min-20)
-        img_y_max = min(self.command_parent.pred.shape[0], img_y_max+20)
+        img_y_max = min(scene.predictions[key].shape[0], img_y_max+20)
         img_x_min = max(0, img_x_min-20)
-        img_x_max = min(self.command_parent.pred.shape[1], img_x_max+20)
+        img_x_max = min(scene.predictions[key].shape[1], img_x_max+20)
 
         # Crop images
-        pred_crop = self.command_parent.predictions[key][img_y_min:img_y_max, img_x_min:img_x_max].astype(np.float32)
-        img_crop = self.command_parent.img[img_y_min:img_y_max, img_x_min:img_x_max].astype(np.float32)
-        boundmask_crop = self.command_parent.boundmasks[key][img_y_min:img_y_max, img_x_min:img_x_max]
-        landmask_crop = self.command_parent.landmasks[key][img_y_min:img_y_max, img_x_min:img_x_max]
+        pred_crop = scene.predictions[key][img_y_min:img_y_max, img_x_min:img_x_max].astype(np.float32)
+        img_crop = scene.img[img_y_min:img_y_max, img_x_min:img_x_max].astype(np.float32)
+        boundmask_crop = scene.boundmasks[key][img_y_min:img_y_max, img_x_min:img_x_max]
+        landmask_crop = scene.landmasks[key][img_y_min:img_y_max, img_x_min:img_x_max]
 
         # Resize to fit canvas
         # self.zoom_window.update_idletasks()  # Let Tk finish geometry calculation
@@ -192,8 +197,9 @@ class AnnotationPanel(ctk.CTkFrame):
 
     def apply_label_source(self):
         """Apply the selected label source to the main canvas for the selected area."""
+        scene = self.app_state.scene
         key = self.zoom_mode_var_lbl_source.get()
-        if key not in self.command_parent.predictions:
+        if key not in scene.predictions:
             messagebox.showinfo("Error", f"Invalid label source {key}.", parent=self.zoom_window)
             return
 
@@ -206,24 +212,24 @@ class AnnotationPanel(ctk.CTkFrame):
             #     messagebox.showinfo("Error", "Only 'Custom Annotation' segmentation source can be reset.", parent=self.zoom_window)
             #     return
 
-            self.command_parent.pred[self.command_parent.selected_polygon_area_idx] = \
-                self.command_parent.predictions[key][self.command_parent.selected_polygon_area_idx]
-            self.command_parent.pred[self.command_parent.landmask] = [255, 255, 255]
+            scene.predictions[scene.active_source][self.command_parent.selected_polygon_area_idx] = \
+                scene.predictions[key][self.command_parent.selected_polygon_area_idx]
+            scene.predictions[scene.active_source][scene.landmasks[scene.active_source]] = [255, 255, 255]
 
             # Update boundaries
             img_y_min, img_y_max, img_x_min, img_x_max = self.command_parent.selected_polygon_window
             img_y_min = max(0, img_y_min-20)
-            img_y_max = min(self.command_parent.pred.shape[0], img_y_max+20)
+            img_y_max = min(scene.predictions[scene.active_source].shape[0], img_y_max+20)
             img_x_min = max(0, img_x_min-20)
-            img_x_max = min(self.command_parent.pred.shape[1], img_x_max+20)
-            self.command_parent.boundmask[img_y_min:img_y_max, img_x_min:img_x_max] = \
+            img_x_max = min(scene.predictions[scene.active_source].shape[1], img_x_max+20)
+            scene.boundmasks[scene.active_source][img_y_min:img_y_max, img_x_min:img_x_max] = \
                 generate_boundaries(rgb2gray(
-                    self.command_parent.pred[img_y_min:img_y_max, img_x_min:img_x_max]))
+                    scene.predictions[scene.active_source][img_y_min:img_y_max, img_x_min:img_x_max]))
 
             # Update current label source
-            self.command_parent.predictions[main_key] = self.command_parent.pred.copy()
-            self.command_parent.landmasks[main_key] = self.command_parent.landmask.copy()
-            self.command_parent.boundmasks[main_key] = self.command_parent.boundmask.copy()
+            # scene.predictions[main_key] = self.command_parent.pred.copy()
+            # scene.landmasks[main_key] = self.command_parent.landmask.copy()
+            # scene.boundmasks[main_key] = self.command_parent.boundmask.copy()
 
             # Update main display
             # Calling refresh_img function from visualzier which consists of crop_resize, set_overlay, display_img
@@ -239,15 +245,16 @@ class AnnotationPanel(ctk.CTkFrame):
             self.save_button.configure(state=ctk.NORMAL)
 
     def save_annotation(self):
+        scene = self.app_state.scene
 
         key = "Custom_Annotation"
-        if key not in self.command_parent.predictions.keys():
+        if key not in scene.predictions.keys():
             messagebox.showerror("Error", f"There is no {key} to save.")
             return False
         
-        file_path = self.command_parent.filenames[list(self.command_parent.predictions).index(key)]
+        file_path = scene.filenames[list(scene.predictions).index(key)]
         os.makedirs(os.path.split(file_path)[0], exist_ok=True)
-        img = self.command_parent.predictions[key].copy()
+        img = scene.predictions[key].copy()
         img[(img == [0, 255, 255]).all(axis=2)] = [0, 0, 128]
         img[(img == [255, 130, 0]).all(axis=2)] = [128, 0, 0]
         Image.fromarray(img).save(file_path)

@@ -65,11 +65,10 @@ def load_prediction(folder_path, filenames, lbl_source):
 
     file_names = [folder_path + f for f in filenames]
     
-    # Clean this up later possibly change to only use one path, no if else
     if len(lbl_source) > 1:
         variables = Parallel(PredictionLoader, zip(lbl_source, file_names))
     else:
-        variables = [PredictionLoader(zip(lbl_source, file_names))]
+        variables = [PredictionLoader(zip(lbl_source[0], file_names[0]))]
 
     return variables
 

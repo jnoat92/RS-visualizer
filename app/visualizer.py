@@ -222,6 +222,7 @@ class Visualizer(ctk.CTk):
             row=0, column=0, sticky="nsew", pady=5
         )
 
+        # Might want to move this out into another file for easy editing
         self.lbl_source = [
             "Unet+ITT_pixel",
             # "Unet+ITT_pixel+MV",
@@ -234,7 +235,7 @@ class Visualizer(ctk.CTk):
             "colored_predict_transformer.png",
             # "resnet.png"
         ]
-        self.filenames = ["/{}/{}".format(lbl_s, file)
+        self.app_state.scene.filenames = ["/{}/{}".format(lbl_s, file)
                         for lbl_s, file in zip(self.lbl_source, filenames_)]
         self.lbl_source_buttom = {}
         self.mode_var_lbl_source = None
@@ -295,7 +296,7 @@ class Visualizer(ctk.CTk):
         self.sidebar.grid_columnconfigure(0, weight=1)
 
         #%% INITIAL VISUALIZATION / STATE
-        self.app_state.scene.folder_path = ""
+        # self.app_state.scene.folder_path = ""
         self.alpha = 0.5
         
         self.channels = self.mode_var_color_composite.get()
@@ -331,11 +332,11 @@ class Visualizer(ctk.CTk):
 
         scene = self.app_state.scene
 
-        self.predictions = {}
-        self.landmasks = {}
-        self.boundmasks = {}
+        scene.predictions = {}
+        scene.landmasks = {}
+        scene.boundmasks = {}
 
-        variables = load_prediction(scene.folder_path, self.filenames, self.lbl_source)
+        variables = load_prediction(scene.folder_path, scene.filenames, self.lbl_source)
         
         # variables = [PredictionLoader(it) for it in zip(lbl_source, filenames)]
         
@@ -353,9 +354,9 @@ class Visualizer(ctk.CTk):
                     messagebox.showinfo("Error", f"The selected scene does not contain prediction files for {key}.", parent=self.master)
                 continue
             self.update_label_source_widgets(key, i)
-            self.predictions[key] = pred
-            self.landmasks[key] = landmask
-            self.boundmasks[key] = boundmask
+            scene.predictions[key] = pred
+            scene.landmasks[key] = landmask
+            scene.boundmasks[key] = boundmask
 
 
     # Display handle
@@ -365,10 +366,11 @@ class Visualizer(ctk.CTk):
                                 self.alpha)
 
     def Choose_image(self):
+        scene = self.app_state.scene
         if self.Better_contrast_toggle_state:
-            self.img = self.img_Better_contrast[self.channels]
+            scene.img = self.img_Better_contrast[self.channels]
         else:
-            self.img = self.img_[self.channels]
+            scene.img = self.img_[self.channels]
 
     def display_image(self):
         image = self.overlay if self.Segmentation_toggle_state else self.img_resized.astype('uint8')
@@ -382,9 +384,10 @@ class Visualizer(ctk.CTk):
     def refresh_view(self):
 
         view = self.app_state.view
+        scene = self.app_state.scene
         # NEXT STEP: Group the returns
         self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, self.draw_x, self.draw_y = crop_resize(
-                    self.pred, self.img, self.boundmask, self.landmask, 
+                    scene.predictions[scene.active_source], scene.img, scene.boundmasks[scene.active_source], scene.landmasks[scene.active_source], 
                     view.zoom_factor, view.offset_x, view.offset_y, 
                     self.canvas.winfo_width(), self.canvas.winfo_height())
         self.set_overlay()
@@ -577,12 +580,13 @@ class Visualizer(ctk.CTk):
     def reset_zoom(self):
 
         view = self.app_state.view
+        scene = self.app_state.scene
         # Get canvas dimensions
         canvas_width = self.canvas.winfo_width()
         canvas_height = self.canvas.winfo_height()
 
         # Use overlay or base image to get image size
-        img_height, img_width = self.img.shape[:2]
+        img_height, img_width = scene.img.shape[:2]
 
         # Compute scale to fit the whole image
         scale_x = canvas_width / img_width
@@ -604,18 +608,23 @@ class Visualizer(ctk.CTk):
 
     def Choose_lbl_source(self, plot=True):
 
-        key = self.mode_var_lbl_source.get()
+        scene = self.app_state.scene
+
+        scene.active_source = self.mode_var_lbl_source.get()
+        key = scene.active_source
+        print(scene.predictions.keys())
+        print(type(scene.predictions[scene.active_source]))
 
 
-        if self.predictions[key] is None:
+        if scene.predictions[key] is None:
             messagebox.showinfo("Error", f"The selected directory does not contain prediction files for {key}.", parent=self.master)
             self.mode_var_lbl_source.set(self.mode_var_lbl_source_prev)
             return 0
         self.mode_var_lbl_source_prev = key
 
-        self.pred = self.predictions[key].copy()
-        self.landmask = self.landmasks[key].copy()
-        self.boundmask = self.boundmasks[key].copy()
+        # self.pred = scene.predictions[key].copy()
+        # self.landmask = scene.landmasks[key].copy()
+        # self.boundmask = scene.boundmasks[key].copy()
 
         if plot:
             self.refresh_view()
@@ -704,6 +713,7 @@ class Visualizer(ctk.CTk):
         """Handle left mouse button release to finalize zoom selection, rectangle, or polygon drawing."""	
         
         view = self.app_state.view
+        scene = self.app_state.scene
         if view.zoom_select_mode and view.selection_start_coord:
             # Complete selection and zoom
             x0, y0 = view.selection_start_coord
@@ -733,8 +743,8 @@ class Visualizer(ctk.CTk):
 
             img_x_min = max(0, img_x_min)
             img_y_min = max(0, img_y_min)
-            img_x_max = min(self.img.shape[1], img_x_max)
-            img_y_max = min(self.img.shape[0], img_y_max)
+            img_x_max = min(scene.img.shape[1], img_x_max)
+            img_y_max = min(scene.img.shape[0], img_y_max)
 
             self.zoom_to_rectangle(img_x_min, img_y_min, img_x_max, img_y_max)
         
@@ -762,6 +772,7 @@ class Visualizer(ctk.CTk):
     def on_double_click(self, event):
         """Handle double-click to select polygon."""
         view = self.app_state.view
+        scene = self.app_state.scene
         if self.annotation_window.winfo_viewable():
 
             if (hasattr(self.annotation_panel, 'zoom_window') and 
@@ -776,11 +787,11 @@ class Visualizer(ctk.CTk):
             x = int((event.x - view.offset_x) / view.zoom_factor)
             y = int((event.y - view.offset_y) / view.zoom_factor)
 
-            h, w = self.pred.shape[:2]
+            h, w = scene.predictions[scene.active_source].shape[:2]
             if not (0 <= x < w and 0 <= y < h):
                 return
             
-            contours, mask = get_segment_contours(self.pred, y, x)
+            contours, mask = get_segment_contours(scene.predictions[scene.active_source], y, x)
 
             # select polygon area on image
             self.selected_polygon_area_idx = [(y, x) for y, x in zip(*np.where(mask))]
@@ -837,6 +848,7 @@ class Visualizer(ctk.CTk):
         return 1
 
     def close_annotation_panel(self):
+        scene = self.app_state.scene
         if self.annotation_panel.unsaved_changes:
             result = messagebox.askyesnocancel("Unsaved Changes", "Your 'Custom Annotation is unsaved'. Do you want to save before exiting?")
             if result is None:
@@ -848,9 +860,9 @@ class Visualizer(ctk.CTk):
         # Remove custom annotation from seg sources
         if "Custom_Annotation" in self.lbl_source:
 
-            for i in range(len(self.filenames)):
-                if "Custom_Annotation" in self.filenames[i]:
-                    self.filenames.pop(i)
+            for i in range(len(scene.filenames)):
+                if "Custom_Annotation" in scene.filenames[i]:
+                    scene.filenames.pop(i)
 
             for i in range(len(self.lbl_source)):
                 if self.lbl_source[i] == 'Custom_Annotation':
@@ -955,13 +967,14 @@ class Visualizer(ctk.CTk):
 
     def _finish_polygon(self):
         """Finish drawing a polygon and store it."""
+        scene = self.app_state.scene
         img_points = self.polygon_points_img_coor
         if len(img_points) >= 3:
 
             img_x_min = max(0, min(x for x, y in img_points))
             img_y_min = max(0, min(y for x, y in img_points))
-            img_x_max = min(self.img.shape[1], max(x for x, y in img_points))
-            img_y_max = min(self.img.shape[0], max(y for x, y in img_points))
+            img_x_max = min(scene.img.shape[1], max(x for x, y in img_points))
+            img_y_max = min(scene.img.shape[0], max(y for x, y in img_points))
             if img_x_max > img_x_min and img_y_max > img_y_min:
                 self.selected_polygon_window = (img_y_min, img_y_max, img_x_min, img_x_max)
 
@@ -992,6 +1005,7 @@ class Visualizer(ctk.CTk):
 
 
     def annotate_class(self, class_color):
+        scene = self.app_state.scene
 
         if self.selected_polygon_area_idx is None:
             if self.annotation_mode == 'polygon':
@@ -1005,7 +1019,7 @@ class Visualizer(ctk.CTk):
                 return
         
         # Check if this area is already annotated with the selected class.
-        if (self.pred[self.selected_polygon_area_idx] == class_color).all():
+        if (scene.predictions[scene.active_source][self.selected_polygon_area_idx] == class_color).all():
             self.reset_annotation()
             return
             
@@ -1013,33 +1027,39 @@ class Visualizer(ctk.CTk):
         if key not in self.lbl_source_buttom.keys():
             # Add custom annotation as and additional label source
             self.lbl_source.append(key)
-            self.filenames.append("{}/{}/{}".format(self.lbl_source[-1], self.scene_name, "custom_annotation.png"))
+            scene.filenames.append("{}/{}/{}".format(self.lbl_source[-1], self.scene_name, "custom_annotation.png"))
             self.lbl_source_buttom[key] = ctk.CTkRadioButton(self.lbl_source_frame, 
                                                              text=f"* {key}", 
                                                              variable=self.mode_var_lbl_source, 
                                                              value=key, command=self.Choose_lbl_source)
             self.lbl_source_buttom[key].grid(row=len(self.lbl_source), column=0, sticky="w", pady=(10, 10))
+            
+            # Duplicate scene for new custom annotation scene
+            scene.predictions[key] = scene.predictions[scene.active_source].copy()
+            scene.landmasks[key] = scene.landmasks[scene.active_source].copy()
+            scene.boundmasks[key] = scene.boundmasks[scene.active_source].copy()
+            scene.active_source = key
         else:
             self.lbl_source_buttom[key].configure(text=f"* {key}")
         self.annotation_panel.unsaved_changes = True
         self.annotation_panel.save_button.configure(state=ctk.NORMAL)
 
         self.mode_var_lbl_source.set(key)   # set custom annotation as current label source
-        self.pred[self.selected_polygon_area_idx] = class_color
-        self.pred[self.landmask] = [255, 255, 255]
+        scene.predictions[scene.active_source][self.selected_polygon_area_idx] = class_color
+        scene.predictions[scene.active_source][scene.landmasks[scene.active_source]] = [255, 255, 255]
 
         img_y_min, img_y_max, img_x_min, img_x_max = self.selected_polygon_window
         img_y_min = max(0, img_y_min-20)
-        img_y_max = min(self.pred.shape[0], img_y_max+20)
+        img_y_max = min(scene.predictions[scene.active_source].shape[0], img_y_max+20)
         img_x_min = max(0, img_x_min-20)
-        img_x_max = min(self.pred.shape[1], img_x_max+20)
-        self.boundmask[img_y_min: img_y_max, 
-                       img_x_min: img_x_max] = generate_boundaries(rgb2gray(self.pred[img_y_min: img_y_max, 
+        img_x_max = min(scene.predictions[scene.active_source].shape[1], img_x_max+20)
+        scene.boundmasks[scene.active_source][img_y_min: img_y_max, 
+                       img_x_min: img_x_max] = generate_boundaries(rgb2gray(scene.predictions[scene.active_source][img_y_min: img_y_max, 
                                                                                       img_x_min: img_x_max]))
         
-        self.predictions[key] = self.pred.copy()
-        self.landmasks[key] = self.landmask.copy()
-        self.boundmasks[key] = self.boundmask.copy()
+        # scene.predictions[key] = self.pred.copy()
+        # scene.landmasks[key] = self.landmask.copy()
+        # scene.boundmasks[key] = self.boundmask.copy()
 
         self.refresh_view()
 
