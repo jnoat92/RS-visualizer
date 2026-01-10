@@ -61,13 +61,15 @@ class AnnotationPanel(ctk.CTkFrame):
 
     def reset_label_from(self):
         """Reset the label from available label sources."""
-        if 'Custom_Annotation' not in self.command_parent.lbl_source:
+        anno = self.app_state.anno
+        scene = self.app_state.scene
+        if 'Custom_Annotation' not in scene.lbl_sources:
             messagebox.showinfo("Error", "There is no custom annotation registered.", parent=self.master)
             return
 
-        if self.command_parent.selected_polygon_window is None:
-            if self.command_parent.annotation_mode == 'polygon':
-                if len(self.command_parent.polygon_points_img_coor) < 3:
+        if anno.selected_polygon_window is None:
+            if anno.annotation_mode == 'polygon':
+                if len(anno.polygon_points_img_coor) < 3:
                     messagebox.showinfo("Error", "Polygon incomplete.", parent=self.master)
                     return
                 else:
@@ -102,7 +104,7 @@ class AnnotationPanel(ctk.CTkFrame):
 
         self.zoom_mode_var_lbl_source = None
         self.zoom_lbl_source_buttons = {}
-        for lbl_s in self.command_parent.lbl_source:
+        for lbl_s in scene.lbl_sources:
             if lbl_s == 'Custom_Annotation':
                 continue
             if self.zoom_mode_var_lbl_source is None:
@@ -122,6 +124,8 @@ class AnnotationPanel(ctk.CTkFrame):
     def update_zoomed_display(self):
         """Update the zoomed visualization based on current settings."""
         scene = self.app_state.scene
+        overlay_state = self.app_state.overlay
+        anno = self.app_state.anno
 
         # Current source not custom annotation
         key = self.zoom_mode_var_lbl_source.get()
@@ -129,7 +133,7 @@ class AnnotationPanel(ctk.CTkFrame):
             return
 
         # Get the selected region
-        img_y_min, img_y_max, img_x_min, img_x_max = self.command_parent.selected_polygon_window
+        img_y_min, img_y_max, img_x_min, img_x_max = anno.selected_polygon_window
         img_y_min = max(0, img_y_min-20)
         img_y_max = min(scene.predictions[key].shape[0], img_y_max+20)
         img_x_min = max(0, img_x_min-20)
@@ -163,8 +167,8 @@ class AnnotationPanel(ctk.CTkFrame):
 
         # Apply overlay
         overlay = blend_overlay(pred_resized, img_resized, boundmask_resized, 
-                                                 landmask_resized, self.command_parent.alpha)
-        image = overlay if self.command_parent.Segmentation_toggle_state else img_resized
+                                                 landmask_resized, overlay_state.alpha)
+        image = overlay if overlay_state.show_overlay else img_resized
         image = image.astype(np.uint8)
 
         # Convert to PhotoImage
@@ -179,10 +183,10 @@ class AnnotationPanel(ctk.CTkFrame):
         y_offset = (canvas_height - zoomed_height) // 2
 
         # Draw polygon
-        if not self.command_parent.multiple_polygons:
-            polygon_points_img_coor = [self.command_parent.polygon_points_img_coor]
+        if not anno.multiple_polygons:
+            polygon_points_img_coor = [anno.polygon_points_img_coor]
         else:
-            polygon_points_img_coor = self.command_parent.polygon_points_img_coor
+            polygon_points_img_coor = anno.polygon_points_img_coor
         
         for p_img_coor in polygon_points_img_coor:
             polygon_points = [
@@ -198,6 +202,7 @@ class AnnotationPanel(ctk.CTkFrame):
     def apply_label_source(self):
         """Apply the selected label source to the main canvas for the selected area."""
         scene = self.app_state.scene
+        anno = self.app_state.anno
         key = self.zoom_mode_var_lbl_source.get()
         if key not in scene.predictions:
             messagebox.showinfo("Error", f"Invalid label source {key}.", parent=self.zoom_window)
@@ -205,19 +210,19 @@ class AnnotationPanel(ctk.CTkFrame):
 
 
         # Update the prediction in the selected area
-        if self.command_parent.selected_polygon_area_idx:
+        if anno.selected_polygon_area_idx:
             self.command_parent.mode_var_lbl_source.set("Custom_Annotation")
             main_key = self.command_parent.mode_var_lbl_source.get()
             # if main_key != "Custom_Annotation":
             #     messagebox.showinfo("Error", "Only 'Custom Annotation' segmentation source can be reset.", parent=self.zoom_window)
             #     return
 
-            scene.predictions[scene.active_source][self.command_parent.selected_polygon_area_idx] = \
-                scene.predictions[key][self.command_parent.selected_polygon_area_idx]
+            scene.predictions[scene.active_source][anno.selected_polygon_area_idx] = \
+                scene.predictions[key][anno.selected_polygon_area_idx]
             scene.predictions[scene.active_source][scene.landmasks[scene.active_source]] = [255, 255, 255]
 
             # Update boundaries
-            img_y_min, img_y_max, img_x_min, img_x_max = self.command_parent.selected_polygon_window
+            img_y_min, img_y_max, img_x_min, img_x_max = anno.selected_polygon_window
             img_y_min = max(0, img_y_min-20)
             img_y_max = min(scene.predictions[scene.active_source].shape[0], img_y_max+20)
             img_x_min = max(0, img_x_min-20)
@@ -226,15 +231,10 @@ class AnnotationPanel(ctk.CTkFrame):
                 generate_boundaries(rgb2gray(
                     scene.predictions[scene.active_source][img_y_min:img_y_max, img_x_min:img_x_max]))
 
-            # Update current label source
-            # scene.predictions[main_key] = self.command_parent.pred.copy()
-            # scene.landmasks[main_key] = self.command_parent.landmask.copy()
-            # scene.boundmasks[main_key] = self.command_parent.boundmask.copy()
-
             # Update main display
             # Calling refresh_img function from visualzier which consists of crop_resize, set_overlay, display_img
             self.command_parent.refresh_view()
-            if self.command_parent.polygon_points_img_coor: 
+            if anno.polygon_points_img_coor: 
                 self.command_parent.draw_polygon_on_canvas()
 
             # Close the zoom window

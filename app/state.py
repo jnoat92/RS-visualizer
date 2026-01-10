@@ -22,6 +22,7 @@ class ViewState:
 
     # Selection zoom
     zoom_select_mode: bool = False
+    # Potentially move these back into visualizer
     selection_rect_id: int = None
     selection_start_coord: tuple[int, int] = None
 
@@ -44,6 +45,9 @@ class SceneState:
     # Store currently selected prediction
     active_source: str = ""
 
+    # Store sources available
+    lbl_sources: list[str] = field(default_factory=list)
+
     # Caching
     last_render_key: tuple = None
     last_render_img: np.ndarray = None
@@ -56,11 +60,14 @@ class DisplaySettings:
     gamma: float = 1.0 # Placeholder for later
     clip: bool = True
 
+    better_contrast: bool = False # Alt contrast method for now
+    channel_mode: str = "(HH, HH, HV)" # Store current channel (image type)
+
 # Data class for values that impact the overlay
 @dataclass(slots=True)
 class OverlaySettings:
-    alpha: float = 0.35
-    show_overlay: bool = True
+    alpha: float = 0.5 # Opacity of overlay
+    show_overlay: bool = True # Segmentation overlay visibility
     show_boundaries: bool = True
     show_landmask: bool = False
     use_gpu: bool = False # CPU quicker based on tests to update overlay
@@ -68,18 +75,18 @@ class OverlaySettings:
 # Data class for annotation functions
 @dataclass(slots=True)
 class AnnotationState:
-    annotation_mode: str = "none"
+    annotation_mode: str = None
     active_label: str = "water"
 
     # Drawing points
-    draft_points_img: list[tuple[int, int]] = field(default_factory=list)
+    polygon_points_img_coor: list[tuple[int, int]] = field(default_factory=list)
 
     # Select created polygon
-    selected_id: str = ""
-    hovered_id: str = ""
+    selected_polygon_window: tuple[int, int, int, int] = None
+    selected_polygon_area_idx: int = None
+    multiple_polygons: bool = False
 
-    # Saved annotation objects
-    #objects: dict[str, AnnotationObject] = field(default_factory=dict)
+    unsaved_changes: bool = False
 
     # Zoom window state
     zoom_window_open: bool = False

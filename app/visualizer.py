@@ -32,6 +32,7 @@ class Visualizer(ctk.CTk):
         super().__init__()
 
         self.app_state = AppState()
+        display = self.app_state.display
         # ==================== GUI DESIGN
 
         # ------- Visualizer settings
@@ -171,8 +172,8 @@ class Visualizer(ctk.CTk):
         ctk.CTkLabel(self.Segmentation_frame, text="Ice/Water Labels").grid(
             row=1, column=0, sticky="e", padx=5, pady=5
         )
-        self.Segmentation_toggle_state = True
-        state = "ON" if self.Segmentation_toggle_state else "OFF"
+        self.app_state.overlay.show_overlay = True
+        state = "ON" if self.app_state.overlay.show_overlay else "OFF"
         self.Segmentation_toggle_btn = ctk.CTkButton(
             self.Segmentation_frame,
             text=state,
@@ -223,7 +224,7 @@ class Visualizer(ctk.CTk):
         )
 
         # Might want to move this out into another file for easy editing
-        self.lbl_source = [
+        self.app_state.scene.lbl_sources = [
             "Unet+ITT_pixel",
             # "Unet+ITT_pixel+MV",
             "Unet+ITT_region",
@@ -236,13 +237,13 @@ class Visualizer(ctk.CTk):
             # "resnet.png"
         ]
         self.app_state.scene.filenames = ["/{}/{}".format(lbl_s, file)
-                        for lbl_s, file in zip(self.lbl_source, filenames_)]
+                        for lbl_s, file in zip(self.app_state.scene.lbl_sources, filenames_)]
         self.lbl_source_buttom = {}
         self.mode_var_lbl_source = None
         self.mode_var_lbl_source_prev = None
 
         # Radio buttons for explicit selection
-        for i, lbl_s in enumerate(self.lbl_source):
+        for i, lbl_s in enumerate(self.app_state.scene.lbl_sources):
             self.update_label_source_widgets(lbl_s, i)
 
         #%% Operations (third block in sidebar)
@@ -296,12 +297,10 @@ class Visualizer(ctk.CTk):
         self.sidebar.grid_columnconfigure(0, weight=1)
 
         #%% INITIAL VISUALIZATION / STATE
-        # self.app_state.scene.folder_path = ""
-        self.alpha = 0.5
-        
-        self.channels = self.mode_var_color_composite.get()
-        if self.channels == "(HH/HV)":
-            self.channels = "HV" if self.HH_HV_switch.get() else "HH"
+
+        display.channel_mode = self.mode_var_color_composite.get()
+        if display.channel_mode == "(HH/HV)":
+            display.channel_mode = "HV" if self.HH_HV_switch.get() else "HH"
 
         # Disable everything until SAR scene is chosen
         self._set_all_children_enabled(
@@ -336,7 +335,7 @@ class Visualizer(ctk.CTk):
         scene.landmasks = {}
         scene.boundmasks = {}
 
-        variables = load_prediction(scene.folder_path, scene.filenames, self.lbl_source)
+        variables = load_prediction(scene.folder_path, scene.filenames, scene.lbl_sources)
         
         # variables = [PredictionLoader(it) for it in zip(lbl_source, filenames)]
         
@@ -363,17 +362,18 @@ class Visualizer(ctk.CTk):
 
     def set_overlay(self):
         self.overlay = compose_overlay(self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, 
-                                self.alpha)
+                                self.app_state.overlay.alpha)
 
     def Choose_image(self):
         scene = self.app_state.scene
+        display = self.app_state.display
         if self.Better_contrast_toggle_state:
-            scene.img = self.img_Better_contrast[self.channels]
+            scene.img = self.img_Better_contrast[display.channel_mode]
         else:
-            scene.img = self.img_[self.channels]
+            scene.img = self.img_[display.channel_mode]
 
     def display_image(self):
-        image = self.overlay if self.Segmentation_toggle_state else self.img_resized.astype('uint8')
+        image = self.overlay if self.app_state.overlay.show_overlay else self.img_resized.astype('uint8')
 
         self.tk_image = ImageTk.PhotoImage(Image.fromarray(image))
 
@@ -399,6 +399,7 @@ class Visualizer(ctk.CTk):
     def Choose_SAR_scene(self):
 
         scene = self.app_state.scene
+        display = self.app_state.display
 
         self.close_evaluation_panel()
         self.close_annotation_panel()
@@ -418,7 +419,7 @@ class Visualizer(ctk.CTk):
 
             self.scene_name = scene.folder_path.split('/')[-1]
 
-            self.title(f"Scene {self.scene_name}-{self.channels}")
+            self.title(f"Scene {self.scene_name}-{display.channel_mode}")
 
             images = load_images(scene.folder_path)
             
@@ -439,16 +440,17 @@ class Visualizer(ctk.CTk):
             self.after(100, self.reset_zoom)    # Delay the initial reset call with .after() so the canvas has its final size:
             
             self._set_all_children_enabled(self.sidebar, True)
-            if self.channels in ["(HH, HH, HV)", "(HH, HV, HV)"]:
+            if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
                 self.HH_HV_switch.configure(state=ctk.DISABLED)
 
         else:
             scene.folder_path = prev_folder_path
 
     def Color_composite(self):
-        self.channels = self.mode_var_color_composite.get()
+        display = self.app_state.display
+        display.channel_mode = self.mode_var_color_composite.get()
 
-        if self.channels == "(HH/HV)":
+        if display.channel_mode == "(HH/HV)":
             self.HH_HV_switch.configure(state=ctk.NORMAL)
             self.HH_HV(get_channel=True)
         else:
@@ -478,16 +480,17 @@ class Visualizer(ctk.CTk):
         self.HH_HV(get_channel=False)
         
     def HH_HV(self, get_channel=True):
+        display = self.app_state.display
 
         if get_channel:
-            self.channels = "HV" if self.HH_HV_switch.get() else "HH"
+            display.channel_mode = "HV" if self.HH_HV_switch.get() else "HH"
 
-        self.title(f"Scene {self.scene_name}-{self.channels}")
+        self.title(f"Scene {self.scene_name}-{display.channel_mode}")
         self.Choose_image()
 
         self.refresh_view()
 
-        if self.polygon_points_img_coor: 
+        if self.app_state.anno.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
 
         if (hasattr(self.annotation_panel, 'zoom_window') and 
@@ -501,11 +504,11 @@ class Visualizer(ctk.CTk):
 
     def Opacity_slider(self, val):
         # self.slider_label.config(text=f"{float(val):.2f}")
-        self.alpha = float(val)/100
+        self.app_state.overlay.alpha = float(val)/100
         self.set_overlay()
         self.display_image()
 
-        if self.polygon_points_img_coor: 
+        if self.app_state.anno.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
 
         if (hasattr(self.annotation_panel, 'zoom_window') and 
@@ -515,11 +518,12 @@ class Visualizer(ctk.CTk):
                 self.annotation_panel.update_zoomed_display()
 
     def Segmentation_toggle(self):
-        self.Segmentation_toggle_state = not self.Segmentation_toggle_state
-        state = "ON" if self.Segmentation_toggle_state else "OFF"
+        overlay_state = self.app_state.overlay
+        overlay_state.show_overlay = not overlay_state.show_overlay
+        state = "ON" if overlay_state.show_overlay else "OFF"
         self.Segmentation_toggle_btn.configure(text=state)
 
-        if self.Segmentation_toggle_state:
+        if overlay_state.show_overlay:
             # Restore default appearance
             self.Segmentation_toggle_btn.configure(
                 fg_color=self.default_fg_color,  # Default customtkinter blue
@@ -536,7 +540,7 @@ class Visualizer(ctk.CTk):
 
         self.display_image()
 
-        if self.polygon_points_img_coor: 
+        if self.app_state.anno.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
 
         if (hasattr(self.annotation_panel, 'zoom_window') and 
@@ -574,7 +578,7 @@ class Visualizer(ctk.CTk):
         view.offset_y = int(canvas_height / 2 - center_y * view.zoom_factor)
 
         self.refresh_view()
-        if self.polygon_points_img_coor: 
+        if self.app_state.anno.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
 
     def reset_zoom(self):
@@ -600,7 +604,7 @@ class Visualizer(ctk.CTk):
         view.offset_y = (canvas_height - new_height) // 2
 
         self.refresh_view()
-        if self.polygon_points_img_coor: 
+        if self.app_state.anno.polygon_points_img_coor:
             self.draw_polygon_on_canvas()
 
 
@@ -612,19 +616,12 @@ class Visualizer(ctk.CTk):
 
         scene.active_source = self.mode_var_lbl_source.get()
         key = scene.active_source
-        print(scene.predictions.keys())
-        print(type(scene.predictions[scene.active_source]))
-
 
         if scene.predictions[key] is None:
             messagebox.showinfo("Error", f"The selected directory does not contain prediction files for {key}.", parent=self.master)
             self.mode_var_lbl_source.set(self.mode_var_lbl_source_prev)
             return 0
         self.mode_var_lbl_source_prev = key
-
-        # self.pred = scene.predictions[key].copy()
-        # self.landmask = scene.landmasks[key].copy()
-        # self.boundmask = scene.boundmasks[key].copy()
 
         if plot:
             self.refresh_view()
@@ -665,20 +662,21 @@ class Visualizer(ctk.CTk):
         view.offset_y = canvas_y - img_y * view.zoom_factor
 
         self.refresh_view()
-        if self.polygon_points_img_coor: 
+        if self.app_state.anno.polygon_points_img_coor:
             self.draw_polygon_on_canvas()
 
     def _on_left_click(self, event):
         """Handle left mouse click for zoom selection, panning, rectangle, or polygon drawing."""
         view = self.app_state.view
+        anno = self.app_state.anno
         if view.zoom_select_mode:
             # Start selection
             view.selection_start_coord = (event.x, event.y)
             view.selection_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='red', width=2)
-        elif self.annotation_mode == 'rectangle':
+        elif anno.annotation_mode == 'rectangle':
                 view.selection_start_coord = (event.x, event.y)
                 self.selected_polygon = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='yellow', width=2)
-        elif self.annotation_mode == 'polygon':
+        elif anno.annotation_mode == 'polygon':
                 self._add_polygon_point(event)
         else:
             # Start pan
@@ -688,12 +686,13 @@ class Visualizer(ctk.CTk):
         """Handle mouse drag for zoom selection, panning, or rectangle drawing."""
 
         view = self.app_state.view
+        anno = self.app_state.anno
         if view.zoom_select_mode and view.selection_start_coord:
             # Update selection rectangle
             x0, y0 = view.selection_start_coord
             x1, y1 = event.x, event.y
             self.canvas.coords(view.selection_rect_id, x0, y0, x1, y1)
-        elif self.annotation_mode == 'rectangle' and view.selection_start_coord:
+        elif anno.annotation_mode == 'rectangle' and view.selection_start_coord:
             x0, y0 = view.selection_start_coord
             x1, y1 = event.x, event.y
             self.canvas.coords(self.selected_polygon, x0, y0, x1, y1)
@@ -706,7 +705,7 @@ class Visualizer(ctk.CTk):
             view.pan_start_screen = (event.x, event.y)
             
             self.refresh_view()
-            if self.polygon_points_img_coor: 
+            if anno.polygon_points_img_coor: 
                 self.draw_polygon_on_canvas()
 
     def _on_left_release(self, event):
@@ -714,6 +713,7 @@ class Visualizer(ctk.CTk):
         
         view = self.app_state.view
         scene = self.app_state.scene
+        anno = self.app_state.anno
         if view.zoom_select_mode and view.selection_start_coord:
             # Complete selection and zoom
             x0, y0 = view.selection_start_coord
@@ -748,13 +748,13 @@ class Visualizer(ctk.CTk):
 
             self.zoom_to_rectangle(img_x_min, img_y_min, img_x_max, img_y_max)
         
-        elif self.annotation_mode == 'rectangle' and view.selection_start_coord:
+        elif anno.annotation_mode == 'rectangle' and view.selection_start_coord:
             x0, y0 = view.selection_start_coord
             x1, y1 = event.x, event.y
 
             polygon_points = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]  # Rectangle points
             for x, y in polygon_points:
-                self.polygon_points_img_coor.append((int((x - view.offset_x) / view.zoom_factor),
+                anno.polygon_points_img_coor.append((int((x - view.offset_x) / view.zoom_factor),
                                                      int((y - view.offset_y) / view.zoom_factor)))
             self._finish_polygon()
             
@@ -766,13 +766,14 @@ class Visualizer(ctk.CTk):
 
     def on_right_click(self, event):
         """Handle right-click to finish polygon drawing."""
-        if self.annotation_mode == 'polygon':
+        if self.app_state.anno.annotation_mode == 'polygon':
             self._finish_polygon()
 
     def on_double_click(self, event):
         """Handle double-click to select polygon."""
         view = self.app_state.view
         scene = self.app_state.scene
+        anno = self.app_state.anno
         if self.annotation_window.winfo_viewable():
 
             if (hasattr(self.annotation_panel, 'zoom_window') and 
@@ -781,7 +782,7 @@ class Visualizer(ctk.CTk):
                 if self.annotation_panel.zoom_window.winfo_viewable():            
                     self.annotation_panel.zoom_window.destroy()
 
-            self.annotation_mode = 'selection'
+            anno.annotation_mode = 'selection'
             self.reset_annotation()
 
             x = int((event.x - view.offset_x) / view.zoom_factor)
@@ -794,17 +795,17 @@ class Visualizer(ctk.CTk):
             contours, mask = get_segment_contours(scene.predictions[scene.active_source], y, x)
 
             # select polygon area on image
-            self.selected_polygon_area_idx = [(y, x) for y, x in zip(*np.where(mask))]
-            img_y_min = np.asarray(self.selected_polygon_area_idx)[:,0].min()
-            img_y_max = np.asarray(self.selected_polygon_area_idx)[:,0].max()
-            img_x_min = np.asarray(self.selected_polygon_area_idx)[:,1].min()
-            img_x_max = np.asarray(self.selected_polygon_area_idx)[:,1].max()
-            self.selected_polygon_window = (img_y_min, img_y_max, img_x_min, img_x_max)
-            self.selected_polygon_area_idx = tuple(zip(*self.selected_polygon_area_idx))
+            anno.selected_polygon_area_idx = [(y, x) for y, x in zip(*np.where(mask))]
+            img_y_min = np.asarray(anno.selected_polygon_area_idx)[:,0].min()
+            img_y_max = np.asarray(anno.selected_polygon_area_idx)[:,0].max()
+            img_x_min = np.asarray(anno.selected_polygon_area_idx)[:,1].min()
+            img_x_max = np.asarray(anno.selected_polygon_area_idx)[:,1].max()
+            anno.selected_polygon_window = (img_y_min, img_y_max, img_x_min, img_x_max)
+            anno.selected_polygon_area_idx = tuple(zip(*anno.selected_polygon_area_idx))
 
             # draw polygon(s) on canvas
-            self.polygon_points_img_coor = [[(x, y) for y, x in c] for c in contours]
-            self.multiple_polygons = True
+            anno.polygon_points_img_coor = [[(x, y) for y, x in c] for c in contours]
+            anno.multiple_polygons = True
             self.draw_polygon_on_canvas()
 
 
@@ -858,15 +859,15 @@ class Visualizer(ctk.CTk):
                     return  0   # Failed to save → don't close
         
         # Remove custom annotation from seg sources
-        if "Custom_Annotation" in self.lbl_source:
+        if "Custom_Annotation" in scene.lbl_sources:
 
             for i in range(len(scene.filenames)):
                 if "Custom_Annotation" in scene.filenames[i]:
                     scene.filenames.pop(i)
 
-            for i in range(len(self.lbl_source)):
-                if self.lbl_source[i] == 'Custom_Annotation':
-                    self.lbl_source.pop(i)
+            for i in range(len(scene.lbl_sources)):
+                if scene.lbl_sources[i] == 'Custom_Annotation':
+                    scene.lbl_sources.pop(i)
 
             for key in self.lbl_source_buttom.keys():
                 self.lbl_source_buttom[key].destroy()
@@ -874,7 +875,7 @@ class Visualizer(ctk.CTk):
             self.mode_var_lbl_source = None
             self.mode_var_lbl_source_prev = None
 
-            for i, lbl_s in enumerate(self.lbl_source):
+            for i, lbl_s in enumerate(scene.lbl_sources):
                 self.update_label_source_widgets(lbl_s, i)
             
             self.Choose_lbl_source()
@@ -896,7 +897,7 @@ class Visualizer(ctk.CTk):
             if self.annotation_panel.zoom_window.winfo_viewable():            
                 self.annotation_panel.zoom_window.destroy()
 
-        self.annotation_mode = 'rectangle'
+        self.app_state.anno.annotation_mode = 'rectangle'
         self.canvas.config(cursor="crosshair")
         self.reset_annotation()
 
@@ -908,7 +909,7 @@ class Visualizer(ctk.CTk):
             if self.annotation_panel.zoom_window.winfo_viewable():            
                 self.annotation_panel.zoom_window.destroy()
 
-        self.annotation_mode = 'polygon'
+        self.app_state.anno.annotation_mode = 'polygon'
         self.canvas.config(cursor="crosshair")
         self.reset_annotation()
 
@@ -916,15 +917,17 @@ class Visualizer(ctk.CTk):
 
     def _add_polygon_point(self, event):
         view = self.app_state.view
+        anno = self.app_state.anno
         """Add a point to the polygon."""
-        if self.annotation_mode == 'polygon':
-            self.polygon_points_img_coor.append((int((event.x - view.offset_x) / view.zoom_factor), 
+        if anno.annotation_mode == 'polygon':
+            anno.polygon_points_img_coor.append((int((event.x - view.offset_x) / view.zoom_factor), 
                                                  int((event.y - view.offset_y) / view.zoom_factor)))
             
             self.draw_polygon_on_canvas()
     
     def draw_polygon_on_canvas(self):
         view = self.app_state.view
+        anno = self.app_state.anno
         if self.selected_polygon:
             if isinstance(self.selected_polygon, list):
                 for poly in self.selected_polygon:
@@ -933,10 +936,10 @@ class Visualizer(ctk.CTk):
                 self.canvas.delete(self.selected_polygon)
             self.selected_polygon = None
 
-        if not self.multiple_polygons:
-            polygon_points_img_coor = [self.polygon_points_img_coor]
+        if not anno.multiple_polygons:
+            polygon_points_img_coor = [anno.polygon_points_img_coor]
         else:
-            polygon_points_img_coor = self.polygon_points_img_coor
+            polygon_points_img_coor = anno.polygon_points_img_coor
         
         self.selected_polygon = []
         for p_img_coor in polygon_points_img_coor:
@@ -968,7 +971,8 @@ class Visualizer(ctk.CTk):
     def _finish_polygon(self):
         """Finish drawing a polygon and store it."""
         scene = self.app_state.scene
-        img_points = self.polygon_points_img_coor
+        anno = self.app_state.anno
+        img_points = anno.polygon_points_img_coor
         if len(img_points) >= 3:
 
             img_x_min = max(0, min(x for x, y in img_points))
@@ -976,20 +980,21 @@ class Visualizer(ctk.CTk):
             img_x_max = min(scene.img.shape[1], max(x for x, y in img_points))
             img_y_max = min(scene.img.shape[0], max(y for x, y in img_points))
             if img_x_max > img_x_min and img_y_max > img_y_min:
-                self.selected_polygon_window = (img_y_min, img_y_max, img_x_min, img_x_max)
+                anno.selected_polygon_window = (img_y_min, img_y_max, img_x_min, img_x_max)
 
                 mask = np.zeros((img_y_max - img_y_min, img_x_max - img_x_min), dtype=np.uint8)
                 shifted_points = [(x - img_x_min, y - img_y_min) for x, y in img_points]
                 cv2.fillPoly(mask, [np.array(shifted_points, dtype=np.int32)], 255)
-                self.selected_polygon_area_idx = [(y + img_y_min, x + img_x_min) for y, x in zip(*np.where(mask==255))]
-                self.selected_polygon_area_idx = tuple(zip(*self.selected_polygon_area_idx))
+                anno.selected_polygon_area_idx = [(y + img_y_min, x + img_x_min) for y, x in zip(*np.where(mask==255))]
+                anno.selected_polygon_area_idx = tuple(zip(*anno.selected_polygon_area_idx))
 
             # Reset variables
-            self.annotation_mode = None
+            anno.annotation_mode = None
             self.canvas.config(cursor="")
 
     def reset_annotation(self):
         """Reset the annotation state."""
+        anno = self.app_state.anno
         if self.selected_polygon:
             if isinstance(self.selected_polygon, list):
                 for poly in self.selected_polygon:
@@ -998,18 +1003,19 @@ class Visualizer(ctk.CTk):
                 self.canvas.delete(self.selected_polygon)
             self.selected_polygon = None
 
-        self.polygon_points_img_coor = []
-        self.selected_polygon_window = None
-        self.selected_polygon_area_idx = None
-        self.multiple_polygons = False
+        anno.polygon_points_img_coor = []
+        anno.selected_polygon_window = None
+        anno.selected_polygon_area_idx = None
+        anno.multiple_polygons = False
 
 
     def annotate_class(self, class_color):
         scene = self.app_state.scene
+        anno = self.app_state.anno
 
-        if self.selected_polygon_area_idx is None:
-            if self.annotation_mode == 'polygon':
-                if len(self.polygon_points_img_coor) < 3:
+        if anno.selected_polygon_area_idx is None:
+            if anno.annotation_mode == 'polygon':
+                if len(anno.polygon_points_img_coor) < 3:
                     messagebox.showinfo("Error", "Polygon incomplete.", parent=self.master)
                     return
                 else:
@@ -1019,20 +1025,20 @@ class Visualizer(ctk.CTk):
                 return
         
         # Check if this area is already annotated with the selected class.
-        if (scene.predictions[scene.active_source][self.selected_polygon_area_idx] == class_color).all():
+        if (scene.predictions[scene.active_source][anno.selected_polygon_area_idx] == class_color).all():
             self.reset_annotation()
             return
             
         key = "Custom_Annotation"
         if key not in self.lbl_source_buttom.keys():
             # Add custom annotation as and additional label source
-            self.lbl_source.append(key)
-            scene.filenames.append("{}/{}/{}".format(self.lbl_source[-1], self.scene_name, "custom_annotation.png"))
+            scene.lbl_sources.append(key)
+            scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], self.scene_name, "custom_annotation.png"))
             self.lbl_source_buttom[key] = ctk.CTkRadioButton(self.lbl_source_frame, 
                                                              text=f"* {key}", 
                                                              variable=self.mode_var_lbl_source, 
                                                              value=key, command=self.Choose_lbl_source)
-            self.lbl_source_buttom[key].grid(row=len(self.lbl_source), column=0, sticky="w", pady=(10, 10))
+            self.lbl_source_buttom[key].grid(row=len(scene.lbl_sources), column=0, sticky="w", pady=(10, 10))
             
             # Duplicate scene for new custom annotation scene
             scene.predictions[key] = scene.predictions[scene.active_source].copy()
@@ -1045,10 +1051,10 @@ class Visualizer(ctk.CTk):
         self.annotation_panel.save_button.configure(state=ctk.NORMAL)
 
         self.mode_var_lbl_source.set(key)   # set custom annotation as current label source
-        scene.predictions[scene.active_source][self.selected_polygon_area_idx] = class_color
+        scene.predictions[scene.active_source][anno.selected_polygon_area_idx] = class_color
         scene.predictions[scene.active_source][scene.landmasks[scene.active_source]] = [255, 255, 255]
 
-        img_y_min, img_y_max, img_x_min, img_x_max = self.selected_polygon_window
+        img_y_min, img_y_max, img_x_min, img_x_max = anno.selected_polygon_window
         img_y_min = max(0, img_y_min-20)
         img_y_max = min(scene.predictions[scene.active_source].shape[0], img_y_max+20)
         img_x_min = max(0, img_x_min-20)
@@ -1056,10 +1062,6 @@ class Visualizer(ctk.CTk):
         scene.boundmasks[scene.active_source][img_y_min: img_y_max, 
                        img_x_min: img_x_max] = generate_boundaries(rgb2gray(scene.predictions[scene.active_source][img_y_min: img_y_max, 
                                                                                       img_x_min: img_x_max]))
-        
-        # scene.predictions[key] = self.pred.copy()
-        # scene.landmasks[key] = self.landmask.copy()
-        # scene.boundmasks[key] = self.boundmask.copy()
 
         self.refresh_view()
 
