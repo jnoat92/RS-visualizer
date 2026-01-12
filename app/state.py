@@ -22,9 +22,6 @@ class ViewState:
 
     # Selection zoom
     zoom_select_mode: bool = False
-    # Potentially move these back into visualizer
-    selection_rect_id: int = None
-    selection_start_coord: tuple[int, int] = None
 
 
 # Data class that houses the currently loaded scene and everything tied to that data

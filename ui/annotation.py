@@ -240,7 +240,7 @@ class AnnotationPanel(ctk.CTkFrame):
             # Close the zoom window
             self.zoom_window.destroy()
 
-            self.command_parent.lbl_source_buttom[main_key].configure(text=f"* {main_key}")
+            self.command_parent.lbl_source_btn[main_key].configure(text=f"* {main_key}")
             self.unsaved_changes = True
             self.save_button.configure(state=ctk.NORMAL)
 
@@ -260,7 +260,7 @@ class AnnotationPanel(ctk.CTkFrame):
         Image.fromarray(img).save(file_path)
 
         # mark as saved
-        self.command_parent.lbl_source_buttom[key].configure(text=key)
+        self.command_parent.lbl_source_btn[key].configure(text=key)
         self.unsaved_changes = False
         self.save_button.configure(state=ctk.DISABLED)
 

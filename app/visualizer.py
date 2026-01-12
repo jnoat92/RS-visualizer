@@ -10,6 +10,8 @@ import tkinter as tk
 from tkinter import Canvas, filedialog, messagebox
 from PIL import Image, ImageTk
 import numpy as np
+import cv2
+import os
 
 from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
@@ -20,10 +22,6 @@ from core.segmentation import get_segment_contours
 from core.overlay import compose_overlay
 from core.render import crop_resize
 from app.state import AppState
-
-import cv2
-import os
-
 
 
 class Visualizer(ctk.CTk):
@@ -95,12 +93,12 @@ class Visualizer(ctk.CTk):
         self.select_image_frame.grid(row=0, column=0, padx=5, pady=(0, 5), sticky="nwe")
 
         # Choose SAR scene
-        self.Choose_SAR_scene_toggle_btn = ctk.CTkButton(
+        self.choose_SAR_scene_toggle_btn = ctk.CTkButton(
             self.select_image_frame,
             text="Choose SAR scene",
-            command=self.Choose_SAR_scene
+            command=self.choose_SAR_scene
         )
-        self.Choose_SAR_scene_toggle_btn.grid(row=0, column=0, columnspan=2,
+        self.choose_SAR_scene_toggle_btn.grid(row=0, column=0, columnspan=2,
                                             sticky="w", padx=5, pady=5)
         
         # Color composite selection
@@ -109,17 +107,17 @@ class Visualizer(ctk.CTk):
                                       text="(HH/HV)", 
                                       variable=self.mode_var_color_composite,
                                       value="(HH/HV)", 
-                                      command=self.Color_composite)
+                                      command=self.color_composite)
         HH_HH_HV = ctk.CTkRadioButton(self.select_image_frame,
                                       text="(HH, HH, HV)", 
                                       variable=self.mode_var_color_composite,
                                       value="(HH, HH, HV)", 
-                                      command=self.Color_composite)
+                                      command=self.color_composite)
         HH_HV_HV = ctk.CTkRadioButton(self.select_image_frame,
                                       text="(HH, HV, HV)", 
                                       variable=self.mode_var_color_composite,
                                       value="(HH, HV, HV)", 
-                                      command=self.Color_composite)
+                                      command=self.color_composite)
         HH_HV.grid(   row=1, column=0, sticky="w", pady=(10, 10))
         HH_HH_HV.grid(row=2, column=0, sticky="w", pady=(10, 10), columnspan=2)
         HH_HV_HV.grid(row=3, column=0, sticky="w", pady=(10, 10), columnspan=2)
@@ -136,51 +134,51 @@ class Visualizer(ctk.CTk):
             row=4, column=0, sticky="w", padx=5, pady=5
         )
 
-        self.Better_contrast_toggle_state = True
-        state = "ON" if self.Better_contrast_toggle_state else "OFF"
-        self.Better_contrast_toggle_btn = ctk.CTkButton(
+        self.better_contrast_toggle_state = True
+        state = "ON" if self.better_contrast_toggle_state else "OFF"
+        self.better_contrast_toggle_btn = ctk.CTkButton(
             self.select_image_frame,
             text=state,
             width=19,
-            command=self.Better_contrast_toggle
+            command=self.better_contrast_toggle
         )
-        self.Better_contrast_toggle_btn.grid(row=4, column=1, sticky="w", padx=5, pady=5)
-        self.default_fg_color = self.Better_contrast_toggle_btn.cget("fg_color")
-        self.default_hover_color = self.Better_contrast_toggle_btn.cget("hover_color")
-        self.default_text_color = self.Better_contrast_toggle_btn.cget("text_color")
+        self.better_contrast_toggle_btn.grid(row=4, column=1, sticky="w", padx=5, pady=5)
+        self.default_fg_color = self.better_contrast_toggle_btn.cget("fg_color")
+        self.default_hover_color = self.better_contrast_toggle_btn.cget("hover_color")
+        self.default_text_color = self.better_contrast_toggle_btn.cget("text_color")
 
         # Opacity + segmentation controls in same block
-        self.Segmentation_frame = ctk.CTkFrame(self.control_frame)
-        self.Segmentation_frame.grid(row=1, column=0, padx=5, pady=5, sticky="nwe")
+        self.segmentation_frame = ctk.CTkFrame(self.control_frame)
+        self.segmentation_frame.grid(row=1, column=0, padx=5, pady=5, sticky="nwe")
 
-        self.Opacity_slider_value = 50  # Initial value
-        ctk.CTkLabel(self.Segmentation_frame, text="Opacity").grid(
+        self.opacity_slider_value = 50  # Initial value
+        ctk.CTkLabel(self.segmentation_frame, text="Opacity").grid(
             row=0, column=0, sticky="e", padx=5, pady=5
         )
         self.slider = ctk.CTkSlider(
-            self.Segmentation_frame,
+            self.segmentation_frame,
             from_=0,
             to=100,
             number_of_steps=20,
             width=100,
-            command=self.Opacity_slider
+            command=self.opacity_slider
         )
-        self.slider.set(self.Opacity_slider_value)  # Set initial value
+        self.slider.set(self.opacity_slider_value)  # Set initial value
         self.slider.grid(row=0, column=1, pady=5, padx=5, sticky="w")
 
         # Classes ON/OFF
-        ctk.CTkLabel(self.Segmentation_frame, text="Ice/Water Labels").grid(
+        ctk.CTkLabel(self.segmentation_frame, text="Ice/Water Labels").grid(
             row=1, column=0, sticky="e", padx=5, pady=5
         )
         self.app_state.overlay.show_overlay = True
         state = "ON" if self.app_state.overlay.show_overlay else "OFF"
-        self.Segmentation_toggle_btn = ctk.CTkButton(
-            self.Segmentation_frame,
+        self.segmentation_toggle_btn = ctk.CTkButton(
+            self.segmentation_frame,
             text=state,
             width=19,
-            command=self.Segmentation_toggle
+            command=self.segmentation_toggle
         )
-        self.Segmentation_toggle_btn.grid(row=1, column=1, sticky="w", padx=5, pady=5)
+        self.segmentation_toggle_btn.grid(row=1, column=1, sticky="w", padx=5, pady=5)
 
         # Zoom controls
         self.zoom_frame = ctk.CTkFrame(self.control_frame)
@@ -238,7 +236,7 @@ class Visualizer(ctk.CTk):
         ]
         self.app_state.scene.filenames = ["/{}/{}".format(lbl_s, file)
                         for lbl_s, file in zip(self.app_state.scene.lbl_sources, filenames_)]
-        self.lbl_source_buttom = {}
+        self.lbl_source_btn = {}
         self.mode_var_lbl_source = None
         self.mode_var_lbl_source_prev = None
 
@@ -306,11 +304,11 @@ class Visualizer(ctk.CTk):
         self._set_all_children_enabled(
             self.sidebar,
             False,
-            exclude=[self.Choose_SAR_scene_toggle_btn]
+            exclude=[self.choose_SAR_scene_toggle_btn]
         )
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.after(500, self.Choose_SAR_scene)
+        self.after(500, self.choose_SAR_scene)
 
 
     # Load images
@@ -320,14 +318,14 @@ class Visualizer(ctk.CTk):
         if self.mode_var_lbl_source is None:
             self.mode_var_lbl_source = ctk.StringVar(value=lbl_source)  # Default selection
             self.mode_var_lbl_source_prev = self.mode_var_lbl_source.get()
-        self.lbl_source_buttom[lbl_source] = ctk.CTkRadioButton(self.lbl_source_frame, 
+        self.lbl_source_btn[lbl_source] = ctk.CTkRadioButton(self.lbl_source_frame, 
                                                                 text=lbl_source, 
                                                                 variable=self.mode_var_lbl_source,
                                                                 value=lbl_source, 
                                                                 command=self.Choose_lbl_source)
-        self.lbl_source_buttom[lbl_source].grid(row=i+1, column=0, sticky="w", pady=(10, 10))
+        self.lbl_source_btn[lbl_source].grid(row=i+1, column=0, sticky="w", pady=(10, 10))
 
-    def Load_pred(self):
+    def load_pred(self):
 
         scene = self.app_state.scene
 
@@ -340,9 +338,9 @@ class Visualizer(ctk.CTk):
         # variables = [PredictionLoader(it) for it in zip(lbl_source, filenames)]
         
         # Reset label source radio buttons
-        for key in self.lbl_source_buttom.keys():
-            self.lbl_source_buttom[key].destroy()
-        self.lbl_source_buttom = {}
+        for key in self.lbl_source_btn.keys():
+            self.lbl_source_btn[key].destroy()
+        self.lbl_source_btn = {}
         self.mode_var_lbl_source = None
         self.mode_var_lbl_source_prev = None
 
@@ -364,10 +362,10 @@ class Visualizer(ctk.CTk):
         self.overlay = compose_overlay(self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, 
                                 self.app_state.overlay.alpha)
 
-    def Choose_image(self):
+    def choose_image(self):
         scene = self.app_state.scene
         display = self.app_state.display
-        if self.Better_contrast_toggle_state:
+        if self.better_contrast_toggle_state:
             scene.img = self.img_Better_contrast[display.channel_mode]
         else:
             scene.img = self.img_[display.channel_mode]
@@ -396,7 +394,7 @@ class Visualizer(ctk.CTk):
 
     # Image selection handle
 
-    def Choose_SAR_scene(self):
+    def choose_SAR_scene(self):
 
         scene = self.app_state.scene
         display = self.app_state.display
@@ -431,8 +429,8 @@ class Visualizer(ctk.CTk):
                 self.img_, self.img_Better_contrast = images
             
             
-            self.Choose_image()
-            self.Load_pred()
+            self.choose_image()
+            self.load_pred()
             if not self.Choose_lbl_source(plot=False):
                 scene.folder_path = ''
                 return
@@ -446,7 +444,7 @@ class Visualizer(ctk.CTk):
         else:
             scene.folder_path = prev_folder_path
 
-    def Color_composite(self):
+    def color_composite(self):
         display = self.app_state.display
         display.channel_mode = self.mode_var_color_composite.get()
 
@@ -457,21 +455,21 @@ class Visualizer(ctk.CTk):
             self.HH_HV_switch.configure(state=ctk.DISABLED)
             self.HH_HV(get_channel=False)
 
-    def Better_contrast_toggle(self):
-        self.Better_contrast_toggle_state = not self.Better_contrast_toggle_state
-        state = "ON" if self.Better_contrast_toggle_state else "OFF"
-        self.Better_contrast_toggle_btn.configure(text=state)
+    def better_contrast_toggle(self):
+        self.better_contrast_toggle_state = not self.better_contrast_toggle_state
+        state = "ON" if self.better_contrast_toggle_state else "OFF"
+        self.better_contrast_toggle_btn.configure(text=state)
 
-        if self.Better_contrast_toggle_state:
+        if self.better_contrast_toggle_state:
             # Restore default appearance
-            self.Better_contrast_toggle_btn.configure(
+            self.better_contrast_toggle_btn.configure(
                 fg_color=self.default_fg_color,  # Default customtkinter blue
                 hover_color=self.default_hover_color,
                 text_color=self.default_text_color
             )
         else:
             # Set to gray when OFF
-            self.Better_contrast_toggle_btn.configure(
+            self.better_contrast_toggle_btn.configure(
                 fg_color="#888888",     # Gray background
                 hover_color="#777777",  # Slightly darker on hover
                 text_color="white"
@@ -486,7 +484,7 @@ class Visualizer(ctk.CTk):
             display.channel_mode = "HV" if self.HH_HV_switch.get() else "HH"
 
         self.title(f"Scene {self.scene_name}-{display.channel_mode}")
-        self.Choose_image()
+        self.choose_image()
 
         self.refresh_view()
 
@@ -502,7 +500,7 @@ class Visualizer(ctk.CTk):
 
     # Segmentation handle
 
-    def Opacity_slider(self, val):
+    def opacity_slider(self, val):
         # self.slider_label.config(text=f"{float(val):.2f}")
         self.app_state.overlay.alpha = float(val)/100
         self.set_overlay()
@@ -517,22 +515,22 @@ class Visualizer(ctk.CTk):
             if self.annotation_panel.zoom_window.winfo_viewable():            
                 self.annotation_panel.update_zoomed_display()
 
-    def Segmentation_toggle(self):
+    def segmentation_toggle(self):
         overlay_state = self.app_state.overlay
         overlay_state.show_overlay = not overlay_state.show_overlay
         state = "ON" if overlay_state.show_overlay else "OFF"
-        self.Segmentation_toggle_btn.configure(text=state)
+        self.segmentation_toggle_btn.configure(text=state)
 
         if overlay_state.show_overlay:
             # Restore default appearance
-            self.Segmentation_toggle_btn.configure(
+            self.segmentation_toggle_btn.configure(
                 fg_color=self.default_fg_color,  # Default customtkinter blue
                 hover_color=self.default_hover_color,
                 text_color=self.default_text_color
             )
         else:
             # Set to gray when OFF
-            self.Segmentation_toggle_btn.configure(
+            self.segmentation_toggle_btn.configure(
                 fg_color="#888888",     # Gray background
                 hover_color="#777777",  # Slightly darker on hover
                 text_color="white"
@@ -671,10 +669,10 @@ class Visualizer(ctk.CTk):
         anno = self.app_state.anno
         if view.zoom_select_mode:
             # Start selection
-            view.selection_start_coord = (event.x, event.y)
-            view.selection_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='red', width=2)
+            self.selection_start_coord = (event.x, event.y)
+            self.selection_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='red', width=2)
         elif anno.annotation_mode == 'rectangle':
-                view.selection_start_coord = (event.x, event.y)
+                self.selection_start_coord = (event.x, event.y)
                 self.selected_polygon = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='yellow', width=2)
         elif anno.annotation_mode == 'polygon':
                 self._add_polygon_point(event)
@@ -687,13 +685,13 @@ class Visualizer(ctk.CTk):
 
         view = self.app_state.view
         anno = self.app_state.anno
-        if view.zoom_select_mode and view.selection_start_coord:
+        if view.zoom_select_mode and self.selection_start_coord:
             # Update selection rectangle
-            x0, y0 = view.selection_start_coord
+            x0, y0 = self.selection_start_coord
             x1, y1 = event.x, event.y
-            self.canvas.coords(view.selection_rect_id, x0, y0, x1, y1)
-        elif anno.annotation_mode == 'rectangle' and view.selection_start_coord:
-            x0, y0 = view.selection_start_coord
+            self.canvas.coords(self.selection_rect_id, x0, y0, x1, y1)
+        elif anno.annotation_mode == 'rectangle' and self.selection_start_coord:
+            x0, y0 = self.selection_start_coord
             x1, y1 = event.x, event.y
             self.canvas.coords(self.selected_polygon, x0, y0, x1, y1)
         elif view.pan_start_screen:
@@ -714,15 +712,15 @@ class Visualizer(ctk.CTk):
         view = self.app_state.view
         scene = self.app_state.scene
         anno = self.app_state.anno
-        if view.zoom_select_mode and view.selection_start_coord:
+        if view.zoom_select_mode and self.selection_start_coord:
             # Complete selection and zoom
-            x0, y0 = view.selection_start_coord
+            x0, y0 = self.selection_start_coord
             x1, y1 = event.x, event.y
 
             # Reset variables
-            self.canvas.delete(view.selection_rect_id)
-            view.selection_rect_id = None
-            view.selection_start_coord = None
+            self.canvas.delete(self.selection_rect_id)
+            self.selection_rect_id = None
+            self.selection_start_coord = None
             view.zoom_select_mode = False
             self.zoom_select_btn.configure(**self.zoom_btn_default_style)
             self.canvas.config(cursor="")
@@ -748,8 +746,8 @@ class Visualizer(ctk.CTk):
 
             self.zoom_to_rectangle(img_x_min, img_y_min, img_x_max, img_y_max)
         
-        elif anno.annotation_mode == 'rectangle' and view.selection_start_coord:
-            x0, y0 = view.selection_start_coord
+        elif anno.annotation_mode == 'rectangle' and self.selection_start_coord:
+            x0, y0 = self.selection_start_coord
             x1, y1 = event.x, event.y
 
             polygon_points = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]  # Rectangle points
@@ -759,7 +757,7 @@ class Visualizer(ctk.CTk):
             self._finish_polygon()
             
             # Reset variables
-            view.selection_start_coord = None
+            self.selection_start_coord = None
 
         elif view.pan_start_screen:
             view.pan_start_screen = None  # end pan
@@ -869,9 +867,9 @@ class Visualizer(ctk.CTk):
                 if scene.lbl_sources[i] == 'Custom_Annotation':
                     scene.lbl_sources.pop(i)
 
-            for key in self.lbl_source_buttom.keys():
-                self.lbl_source_buttom[key].destroy()
-            self.lbl_source_buttom = {}
+            for key in self.lbl_source_btn.keys():
+                self.lbl_source_btn[key].destroy()
+            self.lbl_source_btn = {}
             self.mode_var_lbl_source = None
             self.mode_var_lbl_source_prev = None
 
@@ -1030,15 +1028,15 @@ class Visualizer(ctk.CTk):
             return
             
         key = "Custom_Annotation"
-        if key not in self.lbl_source_buttom.keys():
+        if key not in self.lbl_source_btn.keys():
             # Add custom annotation as and additional label source
             scene.lbl_sources.append(key)
             scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], self.scene_name, "custom_annotation.png"))
-            self.lbl_source_buttom[key] = ctk.CTkRadioButton(self.lbl_source_frame, 
+            self.lbl_source_btn[key] = ctk.CTkRadioButton(self.lbl_source_frame, 
                                                              text=f"* {key}", 
                                                              variable=self.mode_var_lbl_source, 
                                                              value=key, command=self.Choose_lbl_source)
-            self.lbl_source_buttom[key].grid(row=len(scene.lbl_sources), column=0, sticky="w", pady=(10, 10))
+            self.lbl_source_btn[key].grid(row=len(scene.lbl_sources), column=0, sticky="w", pady=(10, 10))
             
             # Duplicate scene for new custom annotation scene
             scene.predictions[key] = scene.predictions[scene.active_source].copy()
@@ -1046,7 +1044,7 @@ class Visualizer(ctk.CTk):
             scene.boundmasks[key] = scene.boundmasks[scene.active_source].copy()
             scene.active_source = key
         else:
-            self.lbl_source_buttom[key].configure(text=f"* {key}")
+            self.lbl_source_btn[key].configure(text=f"* {key}")
         self.annotation_panel.unsaved_changes = True
         self.annotation_panel.save_button.configure(state=ctk.NORMAL)
 
