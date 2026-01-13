@@ -341,7 +341,6 @@ class Visualizer(ctk.CTk):
             scene.lbl_sources.append("Custom_Annotation")
             scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], self.scene_name, "custom_annotation.png"))
         
-        print(scene.filenames)
         # variables = [PredictionLoader(it) for it in zip(lbl_source, filenames)]
         
         # Reset label source radio buttons
@@ -1016,25 +1015,35 @@ class Visualizer(ctk.CTk):
             return
             
         key = "Custom_Annotation"
+
+        # Duplicate scene for new/updated custom annotation scene
+        if key != scene.active_source:
+            if key in self.lbl_source_btn.keys():
+                result = messagebox.askyesnocancel("Existing annotation", "You have an existing custom annotation. Do you want to overwrite it?")
+                if result is None:
+                    #self.reset_annotation()
+                    return  # Don't overwrite
+                elif not result:
+                    self.reset_annotation()
+                    return  # Don't overwrite
+
+            scene.predictions[key] = scene.predictions[scene.active_source].copy()
+            scene.landmasks[key] = scene.landmasks[scene.active_source].copy()
+            scene.boundmasks[key] = scene.boundmasks[scene.active_source].copy()
+            scene.active_source = key
+
         if key not in self.lbl_source_btn.keys():
             # Add custom annotation as and additional label source
             scene.lbl_sources.append(key)
             scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], self.scene_name, "custom_annotation.png"))
             self.lbl_source_btn[key] = ctk.CTkRadioButton(self.lbl_source_frame, 
-                                                             text=f"* {key}", 
-                                                             variable=self.mode_var_lbl_source, 
-                                                             value=key, command=self.Choose_lbl_source)
+                                                                text=f"* {key}", 
+                                                                variable=self.mode_var_lbl_source, 
+                                                                value=key, command=self.Choose_lbl_source)
             self.lbl_source_btn[key].grid(row=len(scene.lbl_sources), column=0, sticky="w", pady=(10, 10))
             
         else:
             self.lbl_source_btn[key].configure(text=f"* {key}")
-
-        # Duplicate scene for new/updated custom annotation scene
-        if key != scene.active_source:
-            scene.predictions[key] = scene.predictions[scene.active_source].copy()
-            scene.landmasks[key] = scene.landmasks[scene.active_source].copy()
-            scene.boundmasks[key] = scene.boundmasks[scene.active_source].copy()
-            scene.active_source = key
             
         self.annotation_panel.unsaved_changes = True
         self.annotation_panel.save_button.configure(state=ctk.NORMAL)
