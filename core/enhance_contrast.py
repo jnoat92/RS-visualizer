@@ -24,7 +24,7 @@ def enhance_image(
     if contrast == 0.0:
         return img.copy()
 
-    assert img.dtype == np.uint8, "This version expects uint8"
+    assert img.dtype == np.uint8, "Expecting uint8"
 
     valid = ~land_nan_mask
     enhanced = img.copy()
@@ -47,12 +47,11 @@ def enhance_image(
 
     enhanced[land_nan_mask] = img[land_nan_mask]  # keep masked pixels unchanged
 
-    # --- Blend original and enhanced based on slider ---
-    # Use float32 to avoid uint8 rounding issues
-    out = ((1.0 - contrast) * img.astype(np.float32) +
-           contrast * enhanced.astype(np.float32))
+    # # Blend based on contrast slider, can remove since blend is after this function
+    # out = ((1.0 - contrast) * img.astype(np.float32) +
+    #        contrast * enhanced.astype(np.float32))
 
-    return np.clip(out, 0, 255).astype(np.uint8)
+    return np.clip(enhanced, 0, 255).astype(np.uint8)
 
 def blend(original, enhanced, s):
     s = float(np.clip(s, 0.0, 1.0))

@@ -14,8 +14,6 @@ from utils import generate_boundaries
 import os
 import json
 from parallel_stuff import Parallel
-# from core.contrast_handler import get_img_histogram, get_cutoff_from_cdf, enhance_image
-from core.render import change_contrast
 from core.enhance_contrast import enhance_image
 import sys
 
@@ -84,19 +82,8 @@ def load_base_images(folder_path):
     nan_mask["HH"] = np.isnan(HH)
     nan_mask["HV"] = np.isnan(HV)
 
-    hist_list = {}
-    cum_hist = {}
-    bin_list = {}
-    bands = {}
-    # for img_type in img_base.keys():
-    #     hist_list[img_type], cum_hist[img_type], bin_list[img_type], bands[img_type] = get_img_histogram(img_base[img_type], train_pixels=np.asarray(np.where(~nan_mask[img_type])))
-
     contrast_img = {}
     for img_type in img_base.keys():
-        #contrast_img[img_type] = change_contrast(img_type, img_base[img_type], cum_hist, nan_mask, bin_list, bands, val=0.0)
-        #clips = get_cutoff_from_cdf(cum_hist[img_type][0], bin_list[img_type][0], bands[img_type], bth=0.001, uth=0.999)
-        # clips = get_cutoff_from_cdf(cum_hist[img_type][0], bin_list[img_type][0], bands[img_type], bth=0.000, uth=1.000)
-        # contrast_img[img_type] = enhance_image(img_base[img_type], nan_mask[img_type], clips=clips)
         contrast_img[img_type] = enhance_image(img_base[img_type], nan_mask[img_type], contrast=1.0, bth=0.1, uth=0.9)
     return raw_img, img_base, contrast_img
 

@@ -16,10 +16,10 @@ import os
 from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
 from utils import rgb2gray, generate_boundaries
-from core.io import load_images, load_prediction, load_existing_annotation, load_base_images
+from core.io import load_prediction, load_existing_annotation, load_base_images
 from core.segmentation import get_segment_contours
 from core.overlay import compose_overlay
-from core.render import crop_resize, change_contrast, layer_imagery
+from core.render import crop_resize, layer_imagery
 from core.enhance_contrast import blend
 from app.state import AppState
 
@@ -129,24 +129,7 @@ class Visualizer(ctk.CTk):
         )
         self.HH_HV_switch.grid(row=1, column=1, sticky="w", padx=5, pady=5)
 
-        # # Better Contrast ON/OFF
-        # ctk.CTkLabel(self.select_image_frame, text="Better contrast").grid(
-        #     row=4, column=0, sticky="w", padx=5, pady=5
-        # )
-
-        # self.better_contrast_toggle_state = True
-        # state = "ON" if self.better_contrast_toggle_state else "OFF"
-        # self.better_contrast_toggle_btn = ctk.CTkButton(
-        #     self.select_image_frame,
-        #     text=state,
-        #     width=19,
-        #     command=self.better_contrast_toggle
-        # )
-        # self.better_contrast_toggle_btn.grid(row=4, column=1, sticky="w", padx=5, pady=5)
-        # self.default_fg_color = self.better_contrast_toggle_btn.cget("fg_color")
-        # self.default_hover_color = self.better_contrast_toggle_btn.cget("hover_color")
-        # self.default_text_color = self.better_contrast_toggle_btn.cget("text_color")
-
+        # Contrast slider
         self.contrast_slider_value = 0  # Initial value
         ctk.CTkLabel(self.select_image_frame, text="Contrast").grid(
             row=5, column=0, sticky="e", padx=5, pady=5
@@ -162,6 +145,7 @@ class Visualizer(ctk.CTk):
         self.contrast_slider.set(self.contrast_slider_value)  # Set initial value
         self.contrast_slider.grid(row=5, column=1, pady=5, padx=5, sticky="w")
 
+        # Brightness slider
         self.brightness_slider_value = 0  # Initial value
         ctk.CTkLabel(self.select_image_frame, text="Brightness").grid(
             row=6, column=0, sticky="e", padx=5, pady=5
@@ -415,12 +399,7 @@ class Visualizer(ctk.CTk):
     def choose_image(self):
         scene = self.app_state.scene
         display = self.app_state.display
-        # if self.better_contrast_toggle_state:
-        #     scene.img = self.img_Better_contrast[display.channel_mode]
-        #     scene.orig_img = self.img_Better_contrast[display.channel_mode]
-        # else:
         scene.img = self.img_[display.channel_mode]
-        #scene.orig_img = self.img_[display.channel_mode]
 
     def display_image(self):
         image = self.overlay if self.app_state.overlay.show_overlay else self.img_resized.astype('uint8')
@@ -530,27 +509,6 @@ class Visualizer(ctk.CTk):
             self.HH_HV_switch.configure(state=ctk.DISABLED)
             self.HH_HV(get_channel=False)
 
-    # def better_contrast_toggle(self):
-    #     self.better_contrast_toggle_state = not self.better_contrast_toggle_state
-    #     state = "ON" if self.better_contrast_toggle_state else "OFF"
-    #     self.better_contrast_toggle_btn.configure(text=state)
-
-    #     if self.better_contrast_toggle_state:
-    #         # Restore default appearance
-    #         self.better_contrast_toggle_btn.configure(
-    #             fg_color=self.default_fg_color,  # Default customtkinter blue
-    #             hover_color=self.default_hover_color,
-    #             text_color=self.default_text_color
-    #         )
-    #     else:
-    #         # Set to gray when OFF
-    #         self.better_contrast_toggle_btn.configure(
-    #             fg_color="#888888",     # Gray background
-    #             hover_color="#777777",  # Slightly darker on hover
-    #             text_color="white"
-    #         )
-
-    #     self.HH_HV(get_channel=False)
         
     def HH_HV(self, get_channel=True):
         display = self.app_state.display
@@ -558,8 +516,6 @@ class Visualizer(ctk.CTk):
 
         if get_channel:
             display.channel_mode = "HV" if self.HH_HV_switch.get() else "HH"
-
-        print(display.channel_mode)
 
         self.contrast_slider.set(0)  # Reset contrast slider
         self.contrast_slider_handle(0)
@@ -583,10 +539,8 @@ class Visualizer(ctk.CTk):
         scene = self.app_state.scene
         display = self.app_state.display
         display.contrast = float(val)/100
-        print(display.channel_mode)
-        print(f"Contrast set to {display.contrast}")
+
         if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
-            print("Layering imagery with new contrast")
             HH_contrasted = blend(scene.orig_img["HH"],
                 scene.contrast_img["HH"],
                 display.contrast
