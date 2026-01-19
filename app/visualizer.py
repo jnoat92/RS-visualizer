@@ -20,6 +20,7 @@ from core.io import load_images, load_prediction, load_existing_annotation, load
 from core.segmentation import get_segment_contours
 from core.overlay import compose_overlay
 from core.render import crop_resize, change_contrast, layer_imagery
+from core.enhance_contrast import blend
 from app.state import AppState
 
 
@@ -419,7 +420,7 @@ class Visualizer(ctk.CTk):
         #     scene.orig_img = self.img_Better_contrast[display.channel_mode]
         # else:
         scene.img = self.img_[display.channel_mode]
-        scene.orig_img = self.img_[display.channel_mode]
+        #scene.orig_img = self.img_[display.channel_mode]
 
     def display_image(self):
         image = self.overlay if self.app_state.overlay.show_overlay else self.img_resized.astype('uint8')
@@ -473,9 +474,11 @@ class Visualizer(ctk.CTk):
 
             #images = load_images(scene.folder_path)
 
-            raw_img, orig_img, contrast_images, scene.nan_mask, scene.cum_hist, scene.bin_list, scene.bands = load_base_images(scene.folder_path)
+            raw_img, orig_img, contrast_images = load_base_images(scene.folder_path)
             # Save raw images to app state for later use (e.g., layering)
             scene.raw_img = raw_img
+            scene.orig_img = orig_img
+            scene.contrast_img = contrast_images
 
             if isinstance(raw_img, FileNotFoundError):
                 messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{raw_img}", parent=self.master)
@@ -485,7 +488,6 @@ class Visualizer(ctk.CTk):
                 #self.img_test, self.img_Better_contrast = images
                 self.img_ = orig_img
                 # self.img_Better_contrast = contrast_images
-                print(contrast_images["HH"].shape)
                 self.img_["(HH, HH, HV)"] = layer_imagery(
                     orig_img["HH"],
                     orig_img["HV"],
@@ -553,13 +555,14 @@ class Visualizer(ctk.CTk):
     def HH_HV(self, get_channel=True):
         display = self.app_state.display
         scene = self.app_state.scene
-        self.contrast_slider.set(0)  # Reset contrast slider
-        self.contrast_slider_handle(0)
 
         if get_channel:
             display.channel_mode = "HV" if self.HH_HV_switch.get() else "HH"
 
         print(display.channel_mode)
+
+        self.contrast_slider.set(0)  # Reset contrast slider
+        self.contrast_slider_handle(0)
 
         self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
         self.choose_image()
@@ -579,12 +582,19 @@ class Visualizer(ctk.CTk):
     def contrast_slider_handle(self, val):
         scene = self.app_state.scene
         display = self.app_state.display
-        display.contrast = float(val)/10000
+        display.contrast = float(val)/100
         print(display.channel_mode)
+        print(f"Contrast set to {display.contrast}")
         if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
             print("Layering imagery with new contrast")
-            HH_contrasted = change_contrast("HH", scene.orig_img, scene.cum_hist, scene.nan_mask, scene.bin_list, scene.bands, display.contrast)
-            HV_contrasted = change_contrast("HV", scene.orig_img, scene.cum_hist, scene.nan_mask, scene.bin_list, scene.bands, display.contrast)
+            HH_contrasted = blend(scene.orig_img["HH"],
+                scene.contrast_img["HH"],
+                display.contrast
+            )
+            HV_contrasted = blend(scene.orig_img["HV"],
+                scene.contrast_img["HV"],
+                display.contrast
+            )
             # Re-layer the imagery with new contrast
             scene.img = layer_imagery(
                 HH_contrasted,
@@ -592,7 +602,11 @@ class Visualizer(ctk.CTk):
                 display.channel_mode
             )
         else:
-            scene.img = change_contrast(display.channel_mode, scene.orig_img, scene.cum_hist, scene.nan_mask, scene.bin_list, scene.bands, display.contrast)
+            scene.img = blend(
+                scene.orig_img[display.channel_mode],
+                scene.contrast_img[display.channel_mode],
+                display.contrast
+            )
 
         self.refresh_view()
 

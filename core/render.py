@@ -77,7 +77,7 @@ def change_contrast(img_type, img_base, cum_hist, nan_mask, bin_list, bands, val
     uth = 1- bth
     contrast_img = []
     clips = get_cutoff_from_cdf(cum_hist[img_type][0], bin_list[img_type][0], bands[img_type], bth, uth)
-    contrast_img= enhance_image(img_base.copy(), nan_mask[img_type], clips=clips)
+    contrast_img= enhance_image(img_base[img_type], nan_mask[img_type], clips=clips)
     return contrast_img
 
 def layer_imagery(HH_img, HV_img, stack="(HH, HH, HV)"):
