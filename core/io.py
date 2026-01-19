@@ -7,15 +7,14 @@ Last modified: Jan 2026
 
 from PIL import Image
 import numpy as np
-
-from utils import rgb2gray
-from utils import generate_boundaries
-
 import os
 import json
-from parallel_stuff import Parallel
-from core.enhance_contrast import enhance_image
 import sys
+
+from core.utils import rgb2gray
+from core.utils import generate_boundaries
+from core.parallel_stuff import Parallel
+from core.enhance_contrast import enhance_image
 
 def PredictionLoader(iterator):
     key, filename = iterator

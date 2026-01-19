@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import itertools
-from utils import median_filter_numba_parallel
+from core.utils import median_filter_numba_parallel
 
 def filter_outliers(img, bins=2**16-1, bth=0.001, uth=0.999, train_pixels=None):
     

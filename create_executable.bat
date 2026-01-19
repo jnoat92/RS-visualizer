@@ -4,7 +4,7 @@ REM Build executable for SeaIceMap (PyInstaller)
 REM ============================================
 
 REM ---- Your chosen output root (OneDrive path) ----
-set ROOT="C:\Users\jnoaturn\OneDrive - University of Waterloo\Temp"
+set ROOT="C:\Users\kev80\OneDrive\Documents\Coop-w26\SeaIceMap-executable"
 
 echo Cleaning previous build...
 

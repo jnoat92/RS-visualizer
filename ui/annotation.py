@@ -15,7 +15,7 @@ from PIL import Image, ImageTk
 from tkinter import Canvas
 import numpy as np
 import cv2
-from utils import blend_overlay, generate_boundaries, rgb2gray
+from core.utils import blend_overlay, generate_boundaries, rgb2gray
 from core.io import resource_path
 from app.state import AppState
 

@@ -6,8 +6,7 @@ Last modified: Jan 2026
 import numpy as np
 from skimage.morphology import binary_dilation
 import cv2
-from utils import apply_brightness
-from core.contrast_handler import enhance_image, get_cutoff_from_cdf
+from core.utils import apply_brightness
 
 # Possibly group pred, img, boundmask, landmask
 def crop_resize(pred, img, boundmask, landmask, zoom_factor, offset_x, offset_y, brightness,canvas_width, canvas_height):

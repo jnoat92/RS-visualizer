@@ -15,7 +15,7 @@ import os
 
 from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
-from utils import rgb2gray, generate_boundaries
+from core.utils import rgb2gray, generate_boundaries
 from core.io import load_prediction, load_existing_annotation, load_base_images
 from core.segmentation import get_segment_contours
 from core.overlay import compose_overlay
@@ -451,8 +451,6 @@ class Visualizer(ctk.CTk):
 
             self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
 
-            #images = load_images(scene.folder_path)
-
             raw_img, orig_img, contrast_images = load_base_images(scene.folder_path)
             # Save raw images to app state for later use (e.g., layering)
             scene.raw_img = raw_img
@@ -464,9 +462,8 @@ class Visualizer(ctk.CTk):
                 scene.folder_path = ''
                 return
             else:
-                #self.img_test, self.img_Better_contrast = images
                 self.img_ = orig_img
-                # self.img_Better_contrast = contrast_images
+                
                 self.img_["(HH, HH, HV)"] = layer_imagery(
                     orig_img["HH"],
                     orig_img["HV"],

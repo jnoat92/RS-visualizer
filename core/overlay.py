@@ -5,7 +5,7 @@ Last modified: Jan 2026
 '''
 
 import numpy as np
-from utils import blend_overlay_cuda, blend_overlay
+from core.utils import blend_overlay_cuda, blend_overlay
 from numba import cuda
 
     # Display handle
