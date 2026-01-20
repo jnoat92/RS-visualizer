@@ -1,3 +1,10 @@
+'''
+Annotation panel setup and functions
+
+Last modified: Jan 2026
+'''
+
+from email.mime import text
 import customtkinter as ctk
 from tkinter import messagebox
 import json
@@ -8,17 +15,9 @@ from PIL import Image, ImageTk
 from tkinter import Canvas
 import numpy as np
 import cv2
-from utils import blend_overlay, generate_boundaries, rgb2gray
-import sys
-
-def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller."""
-    if hasattr(sys, '_MEIPASS'):
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+from core.utils import blend_overlay, generate_boundaries, rgb2gray
+from core.io import resource_path
+from app.state import AppState
 
 class AnnotationPanel(ctk.CTkFrame):
     def __init__(self, parent, command_parent=None):
@@ -28,6 +27,7 @@ class AnnotationPanel(ctk.CTkFrame):
         if command_parent is None:
             command_parent = self
         self.command_parent = command_parent
+        self.app_state = command_parent.app_state
 
         # Drawing tools frame
         self.drawing_frame = ctk.CTkFrame(self)
@@ -48,34 +48,43 @@ class AnnotationPanel(ctk.CTkFrame):
                       command=command_parent.label_water).grid(row=1, column=1, padx=5, pady=5)
         ctk.CTkButton(self.labels_frame, text="reset from", 
                       width=20, command=self.reset_label_from).grid(row=1, column=2, padx=5, pady=5)
+        
+        # Notes frame
+        self.notes_frame = ctk.CTkFrame(self)
+        self.notes_frame.grid(row=0, column=2, padx=5, pady=5)
+        ctk.CTkLabel(self.notes_frame, text="Notes:").grid(row=0, column=0, sticky="w", padx=10)
+        self.notes_text = ctk.CTkTextbox(self.notes_frame, width=300, height=50)
+        self.notes_text.grid(row=1, column=0, pady=(0, 5), padx=10)
 
         # Saving annotations
         self.saving_frame = ctk.CTkFrame(self)
-        self.saving_frame.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
+        self.saving_frame.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
         self.save_button = ctk.CTkButton(self.saving_frame, text="Save Annotation", 
                                          width=20, command=self.save_annotation)
         self.save_button.grid(row=0, column=0, padx=5, pady=5)
 
         self.unsaved_changes = False
-        self.save_button.configure(state=ctk.DISABLED)
+        self.save_button.configure(state=ctk.NORMAL)
 
 
     def reset_label_from(self):
         """Reset the label from available label sources."""
-        if 'Custom_Annotation' not in self.command_parent.lbl_source:
+        anno = self.app_state.anno
+        scene = self.app_state.scene
+        if 'Custom_Annotation' not in scene.lbl_sources:
             messagebox.showinfo("Error", "There is no custom annotation registered.", parent=self.master)
             return
 
-        if self.command_parent.selected_polygon_window is None:
-            if self.command_parent.annotation_mode == 'polygon':
-                if len(self.command_parent.polygon_points_img_coor) < 3:
+        if anno.selected_polygon_window is None:
+            if anno.annotation_mode == 'polygon':
+                if len(anno.polygon_points_img_coor) < 3:
                     messagebox.showinfo("Error", "Polygon incomplete.", parent=self.master)
                     return
                 else:
                     self.command_parent._finish_polygon()
-            else:
-                messagebox.showinfo("Error", "Please select a polygon area first.", parent=self.master)
-                return
+            else: # Assume they want to reset the whole image
+                #messagebox.showinfo("Error", "Please select a polygon area first.", parent=self.master)
+                anno.selected_polygon_window = (0, scene.img.shape[0], 0, scene.img.shape[1])
 
         # Create new window
         self.zoom_window = ctk.CTkToplevel(self)
@@ -103,7 +112,7 @@ class AnnotationPanel(ctk.CTkFrame):
 
         self.zoom_mode_var_lbl_source = None
         self.zoom_lbl_source_buttons = {}
-        for lbl_s in self.command_parent.lbl_source:
+        for lbl_s in scene.lbl_sources:
             if lbl_s == 'Custom_Annotation':
                 continue
             if self.zoom_mode_var_lbl_source is None:
@@ -122,25 +131,30 @@ class AnnotationPanel(ctk.CTkFrame):
 
     def update_zoomed_display(self):
         """Update the zoomed visualization based on current settings."""
+        scene = self.app_state.scene
+        overlay_state = self.app_state.overlay
+        anno = self.app_state.anno
+
+        # Current source not custom annotation
         key = self.zoom_mode_var_lbl_source.get()
-        if key not in self.command_parent.predictions:
+        if key not in scene.predictions:
             return
 
         # Get the selected region
-        img_y_min, img_y_max, img_x_min, img_x_max = self.command_parent.selected_polygon_window
+        img_y_min, img_y_max, img_x_min, img_x_max = anno.selected_polygon_window
         img_y_min = max(0, img_y_min-20)
-        img_y_max = min(self.command_parent.pred.shape[0], img_y_max+20)
+        img_y_max = min(scene.predictions[key].shape[0], img_y_max+20)
         img_x_min = max(0, img_x_min-20)
-        img_x_max = min(self.command_parent.pred.shape[1], img_x_max+20)
+        img_x_max = min(scene.predictions[key].shape[1], img_x_max+20)
 
         # Crop images
-        pred_crop = self.command_parent.predictions[key][img_y_min:img_y_max, img_x_min:img_x_max].astype(np.float32)
-        img_crop = self.command_parent.img[img_y_min:img_y_max, img_x_min:img_x_max].astype(np.float32)
-        boundmask_crop = self.command_parent.boundmasks[key][img_y_min:img_y_max, img_x_min:img_x_max]
-        landmask_crop = self.command_parent.landmasks[key][img_y_min:img_y_max, img_x_min:img_x_max]
+        pred_crop = scene.predictions[key][img_y_min:img_y_max, img_x_min:img_x_max].astype(np.float32)
+        img_crop = scene.img[img_y_min:img_y_max, img_x_min:img_x_max].astype(np.float32)
+        boundmask_crop = scene.boundmasks[key][img_y_min:img_y_max, img_x_min:img_x_max]
+        landmask_crop = scene.landmasks[key][img_y_min:img_y_max, img_x_min:img_x_max]
 
         # Resize to fit canvas
-        # self.zoom_window.update_idletasks()  # Let Tk finish geometry calculation
+        self.zoom_window.update_idletasks()  # Let Tk finish geometry calculation
         canvas_width = self.zoom_canvas.winfo_width()
         canvas_height = self.zoom_canvas.winfo_height()
         if canvas_width <= 1 or canvas_height <= 1:  # Canvas not yet realized
@@ -161,8 +175,8 @@ class AnnotationPanel(ctk.CTkFrame):
 
         # Apply overlay
         overlay = blend_overlay(pred_resized, img_resized, boundmask_resized, 
-                                                 landmask_resized, self.command_parent.alpha)
-        image = overlay if self.command_parent.Segmentation_toggle_state else img_resized
+                                                 landmask_resized, overlay_state.alpha)
+        image = overlay if overlay_state.show_overlay else img_resized
         image = image.astype(np.uint8)
 
         # Convert to PhotoImage
@@ -176,93 +190,144 @@ class AnnotationPanel(ctk.CTkFrame):
         x_offset = (canvas_width - zoomed_width) // 2
         y_offset = (canvas_height - zoomed_height) // 2
 
-        # Draw polygon
-        if not self.command_parent.multiple_polygons:
-            polygon_points_img_coor = [self.command_parent.polygon_points_img_coor]
-        else:
-            polygon_points_img_coor = self.command_parent.polygon_points_img_coor
-        
-        for p_img_coor in polygon_points_img_coor:
-            polygon_points = [
-                ((x - img_x_min) * zoom_factor + x_offset,
-                 (y - img_y_min) * zoom_factor + y_offset)
-                for x, y in p_img_coor
-            ]
-            self.zoom_canvas.create_polygon(
-                polygon_points, outline='yellow', width=1, fill=''
-            )
+        if anno.polygon_points_img_coor:
+            # Draw polygon
+            if not anno.multiple_polygons:
+                polygon_points_img_coor = [anno.polygon_points_img_coor]
+            else:
+                polygon_points_img_coor = anno.polygon_points_img_coor
+            
+            for p_img_coor in polygon_points_img_coor:
+                polygon_points = [
+                    ((x - img_x_min) * zoom_factor + x_offset,
+                    (y - img_y_min) * zoom_factor + y_offset)
+                    for x, y in p_img_coor
+                ]
+                self.zoom_canvas.create_polygon(
+                    polygon_points, outline='yellow', width=1, fill=''
+                )
+        # If empty: No polygon to draw, assume whole picture reset
 
 
     def apply_label_source(self):
         """Apply the selected label source to the main canvas for the selected area."""
+        scene = self.app_state.scene
+        anno = self.app_state.anno
         key = self.zoom_mode_var_lbl_source.get()
-        if key not in self.command_parent.predictions:
+        if key not in scene.predictions:
             messagebox.showinfo("Error", f"Invalid label source {key}.", parent=self.zoom_window)
             return
 
 
         # Update the prediction in the selected area
-        if self.command_parent.selected_polygon_area_idx:
+        if anno.selected_polygon_area_idx:
             self.command_parent.mode_var_lbl_source.set("Custom_Annotation")
             main_key = self.command_parent.mode_var_lbl_source.get()
             # if main_key != "Custom_Annotation":
             #     messagebox.showinfo("Error", "Only 'Custom Annotation' segmentation source can be reset.", parent=self.zoom_window)
             #     return
 
-            self.command_parent.pred[self.command_parent.selected_polygon_area_idx] = \
-                self.command_parent.predictions[key][self.command_parent.selected_polygon_area_idx]
-            self.command_parent.pred[self.command_parent.landmask] = [255, 255, 255]
+            scene.predictions[scene.active_source][anno.selected_polygon_area_idx] = \
+                scene.predictions[key][anno.selected_polygon_area_idx]
+            scene.predictions[scene.active_source][scene.landmasks[scene.active_source]] = [255, 255, 255]
 
             # Update boundaries
-            img_y_min, img_y_max, img_x_min, img_x_max = self.command_parent.selected_polygon_window
+            img_y_min, img_y_max, img_x_min, img_x_max = anno.selected_polygon_window
             img_y_min = max(0, img_y_min-20)
-            img_y_max = min(self.command_parent.pred.shape[0], img_y_max+20)
+            img_y_max = min(scene.predictions[scene.active_source].shape[0], img_y_max+20)
             img_x_min = max(0, img_x_min-20)
-            img_x_max = min(self.command_parent.pred.shape[1], img_x_max+20)
-            self.command_parent.boundmask[img_y_min:img_y_max, img_x_min:img_x_max] = \
+            img_x_max = min(scene.predictions[scene.active_source].shape[1], img_x_max+20)
+            scene.boundmasks[scene.active_source][img_y_min:img_y_max, img_x_min:img_x_max] = \
                 generate_boundaries(rgb2gray(
-                    self.command_parent.pred[img_y_min:img_y_max, img_x_min:img_x_max]))
-
-            # Update current label source
-            self.command_parent.predictions[main_key] = self.command_parent.pred.copy()
-            self.command_parent.landmasks[main_key] = self.command_parent.landmask.copy()
-            self.command_parent.boundmasks[main_key] = self.command_parent.boundmask.copy()
+                    scene.predictions[scene.active_source][img_y_min:img_y_max, img_x_min:img_x_max]))
 
             # Update main display
-            self.command_parent.crop_resize()
-            self.command_parent.Overlay()
-            self.command_parent.display_image()
-            if self.command_parent.polygon_points_img_coor: 
+            # Calling refresh_img function from visualzier which consists of crop_resize, set_overlay, display_img
+            self.command_parent.refresh_view()
+            if anno.polygon_points_img_coor: 
                 self.command_parent.draw_polygon_on_canvas()
 
             # Close the zoom window
             self.zoom_window.destroy()
 
-            self.command_parent.lbl_source_buttom[main_key].configure(text=f"* {main_key}")
+            self.command_parent.lbl_source_btn[main_key].configure(text=f"* {main_key}")
             self.unsaved_changes = True
-            self.save_button.configure(state=ctk.NORMAL)
+            #self.save_button.configure(state=ctk.NORMAL)
+        else:
+            # Whole area reset
+            scene.predictions[scene.active_source] = scene.predictions[key].copy()
+            scene.landmasks[scene.active_source] = scene.landmasks[key].copy()
+            scene.boundmasks[scene.active_source] = scene.boundmasks[key].copy()
+            self.command_parent.refresh_view()
+
+            # Close the zoom window
+            self.zoom_window.destroy()
+
+            self.command_parent.lbl_source_btn[scene.active_source].configure(text=f"* {scene.active_source}")
+            self.unsaved_changes = True
+            #self.save_button.configure(state=ctk.NORMAL)
 
     def save_annotation(self):
+        scene = self.app_state.scene
+        anno = self.app_state.anno
+
+        notes = self.notes_text.get("1.0", "end").strip()
 
         key = "Custom_Annotation"
-        if key not in self.command_parent.predictions.keys():
+        if key not in scene.predictions.keys():
             messagebox.showerror("Error", f"There is no {key} to save.")
             return False
         
-        file_path = self.command_parent.filenames[list(self.command_parent.predictions).index(key)]
+        file_path = scene.filenames[list(scene.predictions).index(key)]
         os.makedirs(os.path.split(file_path)[0], exist_ok=True)
-        img = self.command_parent.predictions[key].copy()
+        img = scene.predictions[key].copy()
         img[(img == [0, 255, 255]).all(axis=2)] = [0, 0, 128]
         img[(img == [255, 130, 0]).all(axis=2)] = [128, 0, 0]
         Image.fromarray(img).save(file_path)
 
+        new_note = {
+            scene.scene_name: {
+                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "notes": notes
+            }
+        }
+        
+        notes_file_folder = os.path.split(os.path.split(file_path)[0])[0]
+        notes_file_path = os.path.join(notes_file_folder, "annotation_notes.json")
+
+        if os.path.exists(notes_file_path):
+            with open(notes_file_path, 'r') as f:
+                try:
+                    existing_notes = json.load(f)
+                except json.JSONDecodeError:
+                    existing_notes = {}
+        else:
+            existing_notes = {}
+        
+        if scene.scene_name in existing_notes:
+            existing_notes[scene.scene_name] = new_note[scene.scene_name]
+        else:
+            existing_notes.update(new_note)
+            
+        with open(notes_file_path, 'w') as f:
+            json.dump(existing_notes, f, indent=4)
+
+        anno.annotation_notes = notes
+
         # mark as saved
-        self.command_parent.lbl_source_buttom[key].configure(text=key)
+        self.command_parent.lbl_source_btn[key].configure(text=key)
         self.unsaved_changes = False
-        self.save_button.configure(state=ctk.DISABLED)
+        #self.save_button.configure(state=ctk.DISABLED)
 
         messagebox.showinfo("Saved", f"Evaluation saved to {file_path}", parent=self.master)
         return True
+
+    def insert_existing_notes(self, notes):
+        if self.notes_text.get("1.0", "end").strip() == "":
+            self.notes_text.insert("1.0", f"{notes}")
+
+    def clear_notes(self):
+        self.notes_text.delete("1.0", "end")
 
 
     def draw_rectangle(self):
@@ -275,15 +340,15 @@ class AnnotationPanel(ctk.CTkFrame):
         pass
         
 
-if __name__ == '__main__':
-    ctk.set_appearance_mode("System")  # "Dark", "Light", or "System"
-    ctk.set_default_color_theme("blue")  # or "green", "dark-blue", etc.
+# if __name__ == '__main__':
+#     ctk.set_appearance_mode("System")  # "Dark", "Light", or "System"
+#     ctk.set_default_color_theme("blue")  # or "green", "dark-blue", etc.
 
-    root = ctk.CTk()
-    root.title("Annotation Panel")
+#     root = ctk.CTk()
+#     root.title("Annotation Panel")
 
-    panel = AnnotationPanel(root)
-    panel.pack(padx=10, pady=10, fill="both", expand=True)
+#     panel = AnnotationPanel(root)
+#     panel.pack(padx=10, pady=10, fill="both", expand=True)
 
 
-    root.mainloop()
+#     root.mainloop()
