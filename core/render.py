@@ -8,7 +8,7 @@ from skimage.morphology import binary_dilation
 import cv2
 from core.utils import apply_brightness
 
-# Possibly group pred, img, boundmask, landmask
+# TO DO: Optimize as it is the bottleneck for performance when changing contrast/brightness and during panning/zooming
 def crop_resize(pred, img, boundmask, landmask, zoom_factor, offset_x, offset_y, brightness,canvas_width, canvas_height):
     #crop = self.get_zoomed_region(self.pred)
     crop = get_zoomed_region(pred, zoom_factor, offset_x, offset_y, canvas_width, canvas_height)
