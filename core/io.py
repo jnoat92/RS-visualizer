@@ -83,7 +83,7 @@ def load_base_images(folder_path):
 
     data_sorted = {}
     for img_type in img_base.keys():
-        data_sorted[img_type] = prepare_sorted_data(raw_img[img_type], valid_mask=~nan_mask[img_type])
+        data_sorted[img_type] = prepare_sorted_data(img_base[img_type], valid_mask=~nan_mask[img_type])
     return raw_img, img_base, data_sorted, nan_mask
 
 

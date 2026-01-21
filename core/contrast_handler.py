@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 
+from core.utils import scale_channels_inplace
+
 def prepare_sorted_data(img, valid_mask=None):
     """
     Precompute sorted per-channel values for fast O(1) percentile queries.
@@ -133,7 +135,7 @@ def enhance_outlier_slider(
     H, W, C = x.shape
     if land_nan_mask is None:
         land_nan_mask = np.zeros((H, W), dtype=bool)
-    valid = ~land_nan_mask
+    # valid = ~land_nan_mask
 
     s = float(np.clip(s, 0.0, s_max))
 
@@ -152,25 +154,9 @@ def enhance_outlier_slider(
     for c in range(C):
         lo = percentile_from_sorted(sorted_data[c], bth)
         hi = percentile_from_sorted(sorted_data[c], uth)
+        scale_channels_inplace(out, lo, hi, c)
 
-        repaired = median_repair_outliers_fast(
-            out[:, :, c],
-            lo=lo,
-            hi=hi,
-            ksize=ksize,
-            return_mask=False
-        )
-
-        # Keep masked pixels unchanged
-        out[:, :, c][valid] = repaired[valid]
-
-    # Convert back to desired dtype (keeps original range; no stretching)
-    if output_dtype == np.uint8:
-        min_ = out[~land_nan_mask].min(0)
-        max_ = out[~land_nan_mask].max(0)
-        out = np.uint8(255*((out - min_) / (max_ - min_)))
-        #out = np.clip(out, 0, 255).astype(np.uint8)
-    else:
-        out = out.astype(output_dtype)
+    out = np.clip(out, 0, 255)
+    out = out.astype(output_dtype)
 
     return out[:, :, 0] if img.ndim == 2 else out

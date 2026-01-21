@@ -138,7 +138,7 @@ class Visualizer(ctk.CTk):
             self.select_image_frame,
             from_=20,
             to=100,
-            number_of_steps=8,
+            number_of_steps=10,
             width=100,
             command=self.contrast_slider_handle
         )
@@ -498,6 +498,11 @@ class Visualizer(ctk.CTk):
         else:
             scene.folder_path = prev_folder_path
 
+        self.contrast_slider.set(20) # reset to default
+        self.app_state.display.contrast = 0.0
+        self.brightness_slider.set(0) # reset to default
+        self.app_state.display.brightness = 0.0
+
     def color_composite(self):
         display = self.app_state.display
         display.channel_mode = self.mode_var_color_composite.get()
@@ -544,7 +549,7 @@ class Visualizer(ctk.CTk):
 
         if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
             HH_contrasted = enhance_outlier_slider(
-                img=scene.raw_img["HH"], # Pass raw image for faster processing
+                img=scene.orig_img["HH"], # Pass raw image for faster processing
                 sorted_data=scene.sorted_data["HH"],
                 land_nan_mask=scene.nan_mask["HH"],
                 s=display.contrast,
@@ -554,7 +559,7 @@ class Visualizer(ctk.CTk):
             )
 
             HV_contrasted = enhance_outlier_slider(
-                img=scene.raw_img["HV"], # Pass raw image for faster processing
+                img=scene.orig_img["HV"], # Pass raw image for faster processing
                 sorted_data=scene.sorted_data["HV"],
                 land_nan_mask=scene.nan_mask["HV"],
                 s=display.contrast,
@@ -563,8 +568,6 @@ class Visualizer(ctk.CTk):
                 output_dtype=np.uint8
             )
 
-            HH_contrasted = np.tile(HH_contrasted[:,:,np.newaxis], (1,1,3))
-            HV_contrasted = np.tile(HV_contrasted[:,:,np.newaxis], (1,1,3))
             # Re-layer the imagery with new contrast
             scene.img = layer_imagery(
                 HH_contrasted,
@@ -573,7 +576,7 @@ class Visualizer(ctk.CTk):
             )
         else:
             scene.img = enhance_outlier_slider(
-                img=scene.raw_img[display.channel_mode], # Pass raw image for faster processing
+                img=scene.orig_img[display.channel_mode], # Pass raw image for faster processing
                 sorted_data=scene.sorted_data[display.channel_mode],
                 land_nan_mask=scene.nan_mask[display.channel_mode],
                 s=display.contrast,
@@ -581,8 +584,6 @@ class Visualizer(ctk.CTk):
                 ksize=5,
                 output_dtype=np.uint8
             )
-
-            scene.img = np.tile(scene.img[:,:,np.newaxis], (1,1,3))
 
         self.refresh_view()
 

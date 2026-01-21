@@ -213,3 +213,13 @@ def median_filter_numba_parallel(img, clips, mask, kernel_size=10):
     else:
         raise ValueError("img must be 2D or 3D (H×W or H×W×C).")
 
+@njit(parallel=True, fastmath=True)
+def scale_channels_inplace(out, lo, hi, c):
+    h, w, ch = out.shape
+    if c < 0 or c >= ch:
+        return
+    scale = 255.0 / (hi - lo + 1e-12)
+
+    for i in prange(h):
+        for j in range(w):
+            out[i, j, c] = (out[i, j, c] - lo) * scale
