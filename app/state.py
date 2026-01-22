@@ -82,6 +82,14 @@ class OverlaySettings:
     show_landmask: bool = False
     use_gpu: bool = False # CPU quicker based on tests to update overlay
 
+    # Local segmentation
+    select_local_segmentation: bool = False
+    show_local_segmentation: bool = False
+    local_segmentation_mask: np.ndarray = None
+    local_segmentation_area: np.ndarray = None
+    local_segmentation_bounds: np.ndarray = None
+    local_segmentation_limits: tuple[int, int, int, int] = None
+
 # Data class for annotation functions
 @dataclass(slots=True)
 class AnnotationState:

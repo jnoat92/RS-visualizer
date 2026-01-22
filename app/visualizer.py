@@ -17,7 +17,7 @@ from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
 from core.utils import rgb2gray, generate_boundaries
 from core.io import load_prediction, load_existing_annotation, load_base_images
-from core.segmentation import get_segment_contours
+from core.segmentation import get_segment_contours, IRGS
 from core.overlay import compose_overlay
 from core.render import crop_resize, layer_imagery
 from core.contrast_handler import enhance_outlier_slider
@@ -396,7 +396,7 @@ class Visualizer(ctk.CTk):
 
     def set_overlay(self):
         self.overlay = compose_overlay(self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, 
-                                self.app_state.overlay.alpha)
+                                self.local_boundmask_resized, self.app_state.overlay.alpha)
 
     def choose_image(self):
         scene = self.app_state.scene
@@ -417,11 +417,12 @@ class Visualizer(ctk.CTk):
         view = self.app_state.view
         scene = self.app_state.scene
         display = self.app_state.display
+        overlay = self.app_state.overlay
         # NEXT STEP: Group the returns, and optimize crop_resize, right now it's the bottleneck for performance on contrast change
-        self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, self.draw_x, self.draw_y = crop_resize(
+        self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, self.local_boundmask_resized, self.draw_x, self.draw_y = crop_resize(
                     scene.predictions[scene.active_source], scene.img, scene.boundmasks[scene.active_source], scene.landmasks[scene.active_source], 
-                    view.zoom_factor, view.offset_x, view.offset_y, display.brightness,
-                    self.canvas.winfo_width(), self.canvas.winfo_height())
+                    overlay.local_segmentation_bounds, view.zoom_factor, view.offset_x, view.offset_y, display.brightness,
+                    self.canvas.winfo_width(), self.canvas.winfo_height(), overlay.show_local_segmentation)
         self.set_overlay()
         self.display_image()
 
@@ -692,8 +693,10 @@ class Visualizer(ctk.CTk):
 
     def enable_zoom_selection(self):
         view = self.app_state.view
-        view.zoom_select_mode = True
-        self.zoom_select_btn.configure(**self.zoom_btn_active_style)
+        overlay = self.app_state.overlay
+        if not overlay.select_local_segmentation: # If not in local segmentation mode perform zoom selection
+            view.zoom_select_mode = True
+            self.zoom_select_btn.configure(**self.zoom_btn_active_style)
         self.canvas.config(cursor="crosshair")
 
     def zoom_to_rectangle(self, x_min, y_min, x_max, y_max):
@@ -718,6 +721,38 @@ class Visualizer(ctk.CTk):
         self.refresh_view()
         if self.app_state.anno.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
+
+    def select_local_segmentation_area(self, x_min, y_min, x_max, y_max):
+        overlay = self.app_state.overlay
+        scene = self.app_state.scene
+
+        overlay.local_segmentation_area = np.stack([scene.raw_img["HH"], scene.raw_img["HV"]], axis=-1)[y_min:y_max, x_min:x_max]
+        print(overlay.local_segmentation_area.shape)
+        overlay.local_segmentation_limits = (x_min, y_min, x_max, y_max)
+        # Disable select local segmentation mode after selection
+        overlay.select_local_segmentation = False
+
+        result = messagebox.askyesno("Local Segmentation Selection",
+                                    "Run unsupervised segmentation on the selected area?",
+                                    parent=self.master)
+        self.canvas.delete(self.selection_rect_id)
+        self.selection_rect_id = None
+        self.selection_start_coord = None
+
+        if result:
+            # Run IRGS on the selected area
+            irgs_output, boundaries = IRGS(overlay.local_segmentation_area, n_classes=15, n_iter=120)
+            overlay.local_segmentation_mask = np.zeros_like(scene.boundmasks[scene.active_source], dtype=np.uint8)
+            overlay.local_segmentation_mask[y_min:y_max, x_min:x_max] = irgs_output
+            overlay.local_segmentation_mask = np.tile(overlay.local_segmentation_mask[:, :, np.newaxis], (1, 1, 3))
+
+            overlay.local_segmentation_bounds = np.zeros_like(scene.boundmasks[scene.active_source], dtype=bool)
+            boundaries_bool = boundaries != 1
+            overlay.local_segmentation_bounds[y_min:y_max, x_min:x_max] = boundaries_bool
+            overlay.show_local_segmentation = True
+            self.refresh_view()
+
+
 
     def reset_zoom(self):
 
@@ -807,10 +842,15 @@ class Visualizer(ctk.CTk):
         """Handle left mouse click for zoom selection, panning, rectangle, or polygon drawing."""
         view = self.app_state.view
         anno = self.app_state.anno
+        overlay = self.app_state.overlay
         if view.zoom_select_mode:
             # Start selection
             self.selection_start_coord = (event.x, event.y)
             self.selection_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='red', width=2)
+        elif overlay.select_local_segmentation:
+            # Start selection for local segmentation
+            self.selection_start_coord = (event.x, event.y)
+            self.selection_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='blue', width=2)
         elif anno.annotation_mode == 'rectangle':
                 self.selection_start_coord = (event.x, event.y)
                 self.selected_polygon = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='yellow', width=2)
@@ -825,8 +865,14 @@ class Visualizer(ctk.CTk):
 
         view = self.app_state.view
         anno = self.app_state.anno
+        overlay = self.app_state.overlay
         if view.zoom_select_mode and self.selection_start_coord:
             # Update selection rectangle
+            x0, y0 = self.selection_start_coord
+            x1, y1 = event.x, event.y
+            self.canvas.coords(self.selection_rect_id, x0, y0, x1, y1)
+        elif overlay.select_local_segmentation and self.selection_start_coord:
+            # Update selection rectangle for local segmentation
             x0, y0 = self.selection_start_coord
             x1, y1 = event.x, event.y
             self.canvas.coords(self.selection_rect_id, x0, y0, x1, y1)
@@ -851,6 +897,7 @@ class Visualizer(ctk.CTk):
         
         view = self.app_state.view
         scene = self.app_state.scene
+        overlay = self.app_state.overlay
         anno = self.app_state.anno
         if view.zoom_select_mode and self.selection_start_coord:
             # Complete selection and zoom
@@ -885,6 +932,35 @@ class Visualizer(ctk.CTk):
             img_y_max = min(scene.img.shape[0], img_y_max)
 
             self.zoom_to_rectangle(img_x_min, img_y_min, img_x_max, img_y_max)
+
+        elif overlay.select_local_segmentation and self.selection_start_coord:
+            # Complete selection and zoom
+            x0, y0 = self.selection_start_coord
+            x1, y1 = event.x, event.y
+
+            # Reset variables
+            self.canvas.config(cursor="")
+
+            # Convert canvas to image coords
+            x_min = min(x0, x1)
+            y_min = min(y0, y1)
+            x_max = max(x0, x1)
+            y_max = max(y0, y1)
+
+            if x_max - x_min < 10 or y_max - y_min < 10:
+                return  # too small
+
+            img_x_min = int((x_min - view.offset_x) / view.zoom_factor)
+            img_y_min = int((y_min - view.offset_y) / view.zoom_factor)
+            img_x_max = int((x_max - view.offset_x) / view.zoom_factor)
+            img_y_max = int((y_max - view.offset_y) / view.zoom_factor)
+
+            img_x_min = max(0, img_x_min)
+            img_y_min = max(0, img_y_min)
+            img_x_max = min(scene.img.shape[1], img_x_max)
+            img_y_max = min(scene.img.shape[0], img_y_max)
+
+            self.select_local_segmentation_area(img_x_min, img_y_min, img_x_max, img_y_max)
         
         elif anno.annotation_mode == 'rectangle' and self.selection_start_coord:
             x0, y0 = self.selection_start_coord
@@ -912,6 +988,7 @@ class Visualizer(ctk.CTk):
         view = self.app_state.view
         scene = self.app_state.scene
         anno = self.app_state.anno
+        overlay = self.app_state.overlay
         if self.annotation_window.winfo_viewable():
 
             if (hasattr(self.annotation_panel, 'zoom_window') and 
@@ -926,11 +1003,27 @@ class Visualizer(ctk.CTk):
             x = int((event.x - view.offset_x) / view.zoom_factor)
             y = int((event.y - view.offset_y) / view.zoom_factor)
 
+            # Check if selection is outside local segmentation area
+            if overlay.show_local_segmentation:
+                if x < overlay.local_segmentation_limits[0] or x >= overlay.local_segmentation_limits[2] or \
+                   y < overlay.local_segmentation_limits[1] or y >= overlay.local_segmentation_limits[3]:
+                    result = messagebox.askyesno("Selection Out of Local Segmentation Area", "Selecting outside of local segmentation view will close the local segmentation view. Close local segmentation view?", parent=self.master)
+                    if result: # Close local segmentation view
+                        overlay.show_local_segmentation = False
+                        self.refresh_view()
+                    else:
+                        return
+
             h, w = scene.predictions[scene.active_source].shape[:2]
             if not (0 <= x < w and 0 <= y < h):
                 return
             
-            contours, mask = get_segment_contours(scene.predictions[scene.active_source], y, x)
+            if overlay.show_local_segmentation:
+                # Change scene.predictions to local irgs for unsupervised segmentation
+                contours, mask = get_segment_contours(overlay.local_segmentation_mask, y, x)
+            else:
+                # Change scene,predictions to irgs for unsupervised segmentation
+                contours, mask = get_segment_contours(scene.predictions[scene.active_source], y, x)
 
             # select polygon area on image
             anno.selected_polygon_area_idx = [(y, x) for y, x in zip(*np.where(mask))]
@@ -1001,6 +1094,8 @@ class Visualizer(ctk.CTk):
                     return  0   # Failed to save → don't close
 
         self.reset_annotation()
+        if self.app_state.overlay.show_local_segmentation:
+            self.clear_local_seg()
         self.annotation_panel.unsaved_changes = False
         self.annotation_window.withdraw()
 
@@ -1213,6 +1308,21 @@ class Visualizer(ctk.CTk):
 
     def label_ice(self):
         self.annotate_class([255, 130, 0])
+
+    # Change this function name later
+    def select_area_local_segmentation(self):
+        overlay = self.app_state.overlay
+        overlay.select_local_segmentation = True
+        # Using zoom selection for local segmentation area selection
+        self.enable_zoom_selection()
+
+    def clear_local_seg(self):
+        overlay = self.app_state.overlay
+        overlay.local_segmentation_area = None
+        overlay.local_segmentation_mask = None
+        overlay.local_segmentation_bounds = None
+        overlay.show_local_segmentation = False
+        self.refresh_view()
 
 
     # Misc

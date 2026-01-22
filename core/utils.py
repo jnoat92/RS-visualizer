@@ -21,7 +21,7 @@ def blend_overlay_cuda(pred, img, boundmask, landmask, alpha, out):
                 out[y, x, c] = alpha * pred[y, x, c] + beta * img[y, x, c]
 
 @njit(parallel=True)
-def blend_overlay(pred, img, boundmask, landmask, alpha):
+def blend_overlay(pred, img, boundmask, landmask, local_boundmask, alpha):
     h, w, c = pred.shape
     out = np.empty((h, w, c), dtype=np.float32)
 
@@ -35,6 +35,8 @@ def blend_overlay(pred, img, boundmask, landmask, alpha):
                 out[y, x, 2] = 255
             elif boundmask[y, x]:
                 out[y, x, :] = pred[y, x, :]
+            elif local_boundmask is not None and local_boundmask[y, x]:
+                out[y, x, :] = 255
             else:
                 for ch in range(c):
                     out[y, x, ch] = alpha * pred[y, x, ch] + beta * img[y, x, ch]

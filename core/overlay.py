@@ -10,7 +10,7 @@ from numba import cuda
 
     # Display handle
 
-def overlay_GPU(pred, img, boundmask, landmask, alpha):
+def overlay_GPU(pred, img, boundmask, landmask, local_boundmask, alpha):
     # Using Numba on the GPU to parallelize 
     h, w, c = pred.shape
     pred = pred.astype(np.float32)
@@ -33,7 +33,7 @@ def overlay_GPU(pred, img, boundmask, landmask, alpha):
     # self.overlay = blended.astype(np.uint8)
     return blended.astype(np.uint8)
 
-def overlay(pred, img, boundmask, landmask, alpha):
+def overlay(pred, img, boundmask, landmask, local_boundmask,alpha):
 
     # alpha = self.alpha
     # beta = 1 - alpha
@@ -44,12 +44,12 @@ def overlay(pred, img, boundmask, landmask, alpha):
     # Using Numba on the CPU to parallelize 
     pred = pred.astype(np.float32)
     img = img.astype(np.float32)
-    overlay = blend_overlay(pred, img, boundmask, landmask, alpha)
+    overlay = blend_overlay(pred, img, boundmask, landmask, local_boundmask, alpha)
 
     return overlay.astype(np.uint8)
 
-def compose_overlay(pred, img, boundmask, landmask, alpha, use_gpu=False):
+def compose_overlay(pred, img, boundmask, landmask, local_boundmask, alpha, use_gpu=False):
     if use_gpu:
-        return overlay_GPU(pred, img, boundmask, landmask, alpha)
+        return overlay_GPU(pred, img, boundmask, landmask, local_boundmask, alpha)
     else:
-        return overlay(pred, img, boundmask, landmask, alpha)
+        return overlay(pred, img, boundmask, landmask, local_boundmask, alpha)

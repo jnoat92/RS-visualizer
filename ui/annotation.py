@@ -49,16 +49,27 @@ class AnnotationPanel(ctk.CTkFrame):
         ctk.CTkButton(self.labels_frame, text="reset from", 
                       width=20, command=self.reset_label_from).grid(row=1, column=2, padx=5, pady=5)
         
+        # Labels for annotation
+        self.labels_frame = ctk.CTkFrame(self)
+        self.labels_frame.grid(row=0, column=2, padx=5, pady=5)
+        ctk.CTkLabel(self.labels_frame, text="Local Segmentation").grid(row=0, column=0, columnspan=3, sticky="nsew", pady=5)
+        self.local_segmentation_btn = ctk.CTkButton(self.labels_frame, text="Select Area", 
+                      width=20, command=self.command_parent.select_area_local_segmentation).grid(row=1, column=0, padx=5, pady=5)
+        self.local_seg_clear_btn = ctk.CTkButton(self.labels_frame, text="Clear Local Seg", 
+                      width=20, command=self.command_parent.clear_local_seg).grid(row=1, column=1, padx=5, pady=5)
+        
+
+
         # Notes frame
         self.notes_frame = ctk.CTkFrame(self)
-        self.notes_frame.grid(row=0, column=2, padx=5, pady=5)
+        self.notes_frame.grid(row=0, column=3, padx=5, pady=5)
         ctk.CTkLabel(self.notes_frame, text="Notes:").grid(row=0, column=0, sticky="w", padx=10)
         self.notes_text = ctk.CTkTextbox(self.notes_frame, width=300, height=50)
         self.notes_text.grid(row=1, column=0, pady=(0, 5), padx=10)
 
         # Saving annotations
         self.saving_frame = ctk.CTkFrame(self)
-        self.saving_frame.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
+        self.saving_frame.grid(row=1, column=0, columnspan=4, padx=5, pady=5)
         self.save_button = ctk.CTkButton(self.saving_frame, text="Save Annotation", 
                                          width=20, command=self.save_annotation)
         self.save_button.grid(row=0, column=0, padx=5, pady=5)
@@ -175,7 +186,7 @@ class AnnotationPanel(ctk.CTkFrame):
 
         # Apply overlay
         overlay = blend_overlay(pred_resized, img_resized, boundmask_resized, 
-                                                 landmask_resized, overlay_state.alpha)
+                                                 landmask_resized, None, overlay_state.alpha)
         image = overlay if overlay_state.show_overlay else img_resized
         image = image.astype(np.uint8)
 

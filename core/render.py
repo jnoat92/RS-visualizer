@@ -9,7 +9,7 @@ import cv2
 from core.utils import apply_brightness
 
 # TO DO: Optimize as it is the bottleneck for performance when changing contrast/brightness and during panning/zooming
-def crop_resize(pred, img, boundmask, landmask, zoom_factor, offset_x, offset_y, brightness,canvas_width, canvas_height):
+def crop_resize(pred, img, boundmask, landmask, local_boundmask, zoom_factor, offset_x, offset_y, brightness,canvas_width, canvas_height, show_local_segmentation):
     #crop = self.get_zoomed_region(self.pred)
     crop = get_zoomed_region(pred, zoom_factor, offset_x, offset_y, canvas_width, canvas_height)
     if crop is None:
@@ -50,7 +50,13 @@ def crop_resize(pred, img, boundmask, landmask, zoom_factor, offset_x, offset_y,
 
     img_resized = apply_brightness(img_resized, brightness, clip=True)
 
-    return pred_resized, img_resized, boundmask_resized, landmask_resized, draw_x, draw_y
+    if show_local_segmentation and local_boundmask is not None:
+        local_boundmask_crop = local_boundmask[view_top:view_bottom, view_left:view_right]
+        local_boundmask_resized = cv2.resize(local_boundmask_crop.astype(np.uint8), (zoomed_width, zoomed_height), interpolation=cv2.INTER_NEAREST).astype(bool)
+    else:
+        local_boundmask_resized = None
+
+    return pred_resized, img_resized, boundmask_resized, landmask_resized, local_boundmask_resized, draw_x, draw_y
 
 # Next step is to combine zoom factor, offset, etc into a state variable
 # for canvas_width get from self.canvas.winfo_width()
