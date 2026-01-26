@@ -15,6 +15,7 @@ import os
 
 from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
+from ui.minimap import Minimap
 from core.utils import rgb2gray, generate_boundaries
 from core.io import load_prediction, load_existing_annotation, load_base_images
 from core.segmentation import get_segment_contours, IRGS
@@ -313,6 +314,14 @@ class Visualizer(ctk.CTk):
         self.sidebar.grid_rowconfigure(2, weight=1)
         self.sidebar.grid_columnconfigure(0, weight=1)
 
+        # Minimap in bottom-right corner of canvas
+        self.minimap_frame = ctk.CTkFrame(self.canvas, width=180, height=180, corner_radius=12)
+        self.minimap = Minimap(self.minimap_frame, w=180, h=180)
+        self.minimap.pack(fill="both", expand=True)
+        self.minimap_window_id = self.canvas.create_window(0, 0, window=self.minimap_frame, anchor="se", tags=("minimap"))
+        self.canvas.bind("<Configure>", self._update_minimap_position)
+
+
         #%% INITIAL VISUALIZATION / STATE
 
         display.channel_mode = self.mode_var_color_composite.get()
@@ -328,6 +337,13 @@ class Visualizer(ctk.CTk):
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(500, self.choose_SAR_scene)
+
+    # Minimap control
+    def _update_minimap_position(self, event=None):
+        pad = 12
+        w = self.canvas.winfo_width()
+        h = self.canvas.winfo_height()
+        self.canvas.coords(self.minimap_window_id, w - pad, h - pad)
 
 
     # Load images
@@ -403,13 +419,15 @@ class Visualizer(ctk.CTk):
         display = self.app_state.display
         scene.img = self.img_[display.channel_mode]
 
+        self.minimap.set_image(scene.img)
+
     def display_image(self):
         image = self.overlay if self.app_state.overlay.show_overlay else self.img_resized.astype('uint8')
 
         self.tk_image = ImageTk.PhotoImage(Image.fromarray(image))
 
-        self.canvas.delete("all")
-        self.canvas.create_image(self.draw_x, self.draw_y, anchor=tk.NW, image=self.tk_image)
+        self.canvas.delete("main_image")  # Remove previous image
+        self.canvas.create_image(self.draw_x, self.draw_y, anchor=tk.NW, image=self.tk_image, tags=("main_image"))
 
     
     def refresh_view(self):
@@ -425,6 +443,9 @@ class Visualizer(ctk.CTk):
                     self.canvas.winfo_width(), self.canvas.winfo_height(), overlay.show_local_segmentation)
         self.set_overlay()
         self.display_image()
+
+        # Update minimap viewport
+        self.minimap.set_viewport_rect(scene.img, view.zoom_factor, view.offset_x, view.offset_y, self.canvas.winfo_width(), self.canvas.winfo_height())
 
 
     # Image selection handle
