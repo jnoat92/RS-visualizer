@@ -57,8 +57,8 @@ class AnnotationPanel(ctk.CTkFrame):
         self.other_options_var = ctk.StringVar(value="Other")
         self.other_options_menu = ctk.CTkOptionMenu(self.labels_frame, values=self.other_options_list, 
                                                     variable=self.other_options_var, command=self.select_other_label, 
-                                                    fg_color="#585858", button_color="#585858",
-                                                    dropdown_fg_color="#585858", text_color="#000000",
+                                                    fg_color="#A5A5A5", button_color="#A5A5A5",
+                                                    dropdown_fg_color="#A5A5A5", text_color="#000000",
                                                     width=40, corner_radius=10)
         self.other_options_menu.grid(row=1, column=2, padx=5, pady=5)
         ctk.CTkButton(self.labels_frame, text="reset from", 
@@ -84,14 +84,14 @@ class AnnotationPanel(ctk.CTkFrame):
 
         # Notes frame
         self.notes_frame = ctk.CTkFrame(self)
-        self.notes_frame.grid(row=0, column=3, padx=5, pady=5)
+        self.notes_frame.grid(row=0, column=3, padx=5, pady=5, rowspan=2)
         ctk.CTkLabel(self.notes_frame, text="Notes:").grid(row=0, column=0, sticky="w", padx=10)
-        self.notes_text = ctk.CTkTextbox(self.notes_frame, width=300, height=50)
+        self.notes_text = ctk.CTkTextbox(self.notes_frame, width=300, height=100)
         self.notes_text.grid(row=1, column=0, pady=(0, 5), padx=10)
 
         # Saving annotations
         self.saving_frame = ctk.CTkFrame(self)
-        self.saving_frame.grid(row=1, column=0, columnspan=4, padx=5, pady=5)
+        self.saving_frame.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
         self.save_button = ctk.CTkButton(self.saving_frame, text="Save Annotation", 
                                          width=20, command=self.save_annotation)
         self.save_button.grid(row=0, column=0, padx=5, pady=5)
@@ -101,7 +101,6 @@ class AnnotationPanel(ctk.CTkFrame):
 
     def select_other_label(self, choice):
         # Using if, elif for ensuring version compatibility
-        self.other_options_menu.configure(fg_color=self.other_options_color.get(choice, "#969696"))
         if choice == "shoal":
             self.command_parent.label_shoal()
         elif choice == "ship":
@@ -110,6 +109,7 @@ class AnnotationPanel(ctk.CTkFrame):
             self.command_parent.label_iceberg()
         elif choice == "unknown":
             self.command_parent.label_unknown()
+        self.other_options_var.set("Other")
 
     def reset_label_from(self):
         """Reset the label from available label sources."""
