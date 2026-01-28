@@ -1,5 +1,6 @@
 from numba import njit, prange, cuda
 import numpy as np
+from numba.typed import List
 from skimage.measure import find_contours
 
 
@@ -225,3 +226,65 @@ def scale_channels_inplace(out, lo, hi, c):
     for i in prange(h):
         for j in range(w):
             out[i, j, c] = (out[i, j, c] - lo) * scale
+
+@njit
+def _build_mask_from_channel0(x):
+    H, W, _ = x.shape
+    mask = np.empty((H, W), np.bool_)
+    for i in range(H):
+        for j in range(W):
+            mask[i, j] = np.isfinite(x[i, j, 0])
+    return mask
+
+@njit
+def _count_valid(mask):
+    H, W = mask.shape
+    cnt = 0
+    for i in range(H):
+        for j in range(W):
+            if mask[i, j]:
+                cnt += 1
+    return cnt
+
+@njit
+def _gather_channel(x, mask, c):
+    H, W, _ = x.shape
+    n = _count_valid(mask)
+    out = np.empty(n, dtype=x.dtype)
+    k = 0
+    for i in range(H):
+        for j in range(W):
+            if mask[i, j]:
+                out[k] = x[i, j, c]
+                k += 1
+    return out
+
+@njit
+def _prepare_sorted_data_numba(x, mask):
+    C = x.shape[2]
+    sorted_list = List()
+    for c in range(C):
+        v = _gather_channel(x, mask, c)
+        v.sort()  # in-place sort
+        sorted_list.append(v)
+    return sorted_list
+
+def prepare_sorted_data_numba(img, valid_mask=None):
+    """
+    Numba-backed version of prepare_sorted_data.
+
+    Returns a numba.typed.List of 1D sorted arrays (length C or 1).
+    """
+    x = np.asarray(img)
+    if x.ndim == 2:
+        x = x[:, :, None]
+
+    # Numba likes contiguous arrays
+    x = np.ascontiguousarray(x)
+
+    if valid_mask is None:
+        mask = _build_mask_from_channel0(x)
+    else:
+        mask = np.ascontiguousarray(valid_mask.astype(np.bool_))
+
+    return _prepare_sorted_data_numba(x, mask)

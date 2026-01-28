@@ -17,7 +17,7 @@ from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
 from ui.minimap import Minimap
 from core.utils import rgb2gray, generate_boundaries
-from core.io import load_prediction, load_existing_annotation, load_base_images
+from core.io import load_prediction, load_existing_annotation, load_base_images, load_rcm_product
 from core.segmentation import get_segment_contours, IRGS
 from core.overlay import compose_overlay
 from core.render import crop_resize, layer_imagery
@@ -419,6 +419,7 @@ class Visualizer(ctk.CTk):
         display = self.app_state.display
         scene.img = self.img_[display.channel_mode]
 
+        print("Chosen image shape:", scene.img.shape)
         self.minimap.set_image(scene.img)
 
     def display_image(self):
@@ -475,7 +476,11 @@ class Visualizer(ctk.CTk):
 
             self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
 
-            raw_img, orig_img, sorted_data, nan_mask = load_base_images(scene.folder_path)
+            if scene.scene_name.startswith("RCM"):
+                self.rcm_dict, raw_img, orig_img, sorted_data, nan_mask = load_rcm_product(scene.folder_path)
+                print(self.rcm_dict["product_id"])
+            else:
+                raw_img, orig_img, sorted_data, nan_mask = load_base_images(scene.folder_path)
             # Save raw images to app state for later use (e.g., layering)
             scene.raw_img = raw_img
             scene.orig_img = orig_img
@@ -499,6 +504,8 @@ class Visualizer(ctk.CTk):
                     orig_img["HV"],
                     stack="(HH, HV, HV)"
                 )
+
+                print(orig_img["HH"].shape, orig_img["HV"].shape)
             
             # Handle switching scenes with existing custom annotation to one without
             if "Custom_Annotation" in scene.lbl_sources:

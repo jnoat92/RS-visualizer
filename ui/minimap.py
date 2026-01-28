@@ -16,7 +16,7 @@ class Minimap(ctk.CTkFrame):
         self.viewport_item = self.canvas.create_rectangle(0, 0, 0, 0, outline="white", width=2)
 
     def set_image(self, img):
-        pil_img = Image.fromarray(img)
+        pil_img = Image.fromarray(img.astype('uint8'))
         pil_img.thumbnail((self.w, self.h), Image.Resampling.LANCZOS) # high-quality downsampling to fit image into minimap
 
         # Store original and minimap dimensions
