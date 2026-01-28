@@ -113,26 +113,26 @@ def precompute_valid_hist_u8(img_u8: np.ndarray, valid_mask: np.ndarray):
     """
     img_u8: (H,W,C) uint8
     valid_mask: (H,W) bool
-    Returns hist: (C,256) int64 and n_valid: (C,) int64
+    Returns hist: (C,256) int32 and n_valid: (C,) int32
     """
     assert img_u8.dtype == np.uint8
     H, W, C = img_u8.shape
     assert valid_mask.shape == (H, W)
 
-    hist = np.empty((C, 256), dtype=np.int64)
-    n_valid = np.empty(C, dtype=np.int64)
+    hist = np.empty((C, 256), dtype=np.int32)
+    n_valid = np.empty(C, dtype=np.int32)
 
     # This copies only the valid pixels once per channel (acceptable since done once per image)
     for c in range(C):
         x = img_u8[..., c][valid_mask]
-        hist[c] = np.bincount(x.ravel(), minlength=256).astype(np.int64)
+        hist[c] = np.bincount(x.ravel(), minlength=256).astype(np.int32)
         n_valid[c] = x.size
 
     return hist, n_valid
 
 def quantile_from_hist_linear(hist256: np.ndarray, n: int, th: float) -> float:
     """
-    hist256: (256,) int64, n = hist256.sum()
+    hist256: (256,) int32, n = hist256.sum()
     th in [0,1]
     Returns float quantile in [0,255] with within-bin linear interpolation.
     """
@@ -212,6 +212,10 @@ def enhance_outlier_slider(
 
     bth = 0.5 * s
     uth = 1.0 - bth
+    # half = 0.5 * s          # total clipped mass = s
+    # center = 0.5            # fixed center (median)
+    # bth = max(0.0, center - half)
+    # uth = min(1.0, center + half)
 
     out3 = np.empty_like(img3)
 

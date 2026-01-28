@@ -95,7 +95,7 @@ def setup_base_images(HH, HV):
     hist = {}
     n_valid = {}
     for img_type in img_base.keys():
-        print("Preparing hist for ", img_type)
+        print("Preparing hist for", img_type)
         hist[img_type], n_valid[img_type] = precompute_valid_hist_u8(img_base[img_type], valid_mask=~nan_mask[img_type])
     return raw_img, img_base, hist, n_valid, nan_mask
 
