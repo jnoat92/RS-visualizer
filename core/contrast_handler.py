@@ -210,12 +210,8 @@ def enhance_outlier_slider(
         out3 = img3.copy()
         return out3[..., 0] if img_u8.ndim == 2 else out3
 
-    # bth = 0.5 * s
-    # uth = 1.0 - bth
-    half = 0.5 * s          # total clipped mass = s
-    center = 0.5            # fixed center (median)
-    bth = max(0.0, center - half)
-    uth = min(1.0, center + half)
+    bth = 0.5 * s
+    uth = 1.0 - bth
 
     out3 = np.empty_like(img3)
 
