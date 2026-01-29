@@ -358,6 +358,10 @@ class AnnotationPanel(ctk.CTkFrame):
 
         anno.annotation_notes = notes
 
+        annotated_area_file_folder = os.path.split(file_path)[0]
+        annotated_area_file_path = os.path.join(annotated_area_file_folder, "annotated_area.npz")
+        self.command_parent.minimap.save_annotated_area(annotated_area_file_path)
+
         # mark as saved
         self.command_parent.lbl_source_btn[key].configure(text=key)
         self.unsaved_changes = False

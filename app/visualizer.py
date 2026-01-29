@@ -370,7 +370,7 @@ class Visualizer(ctk.CTk):
         scene.boundmasks = {}
 
         variables = load_prediction(scene.folder_path, scene.filenames, scene.lbl_sources)
-        existing_anno, anno.annotation_notes = load_existing_annotation(scene.scene_name)
+        existing_anno, anno.annotation_notes, self.stored_area_idx = load_existing_annotation(scene.scene_name)
 
         if existing_anno is not None:
             variables.append(existing_anno)
@@ -406,6 +406,11 @@ class Visualizer(ctk.CTk):
             if result:
                 scene.active_source = custom_anno
                 self.mode_var_lbl_source.set(custom_anno)
+
+        # Show made annotations on minimap
+        if self.stored_area_idx is not None:
+            self.minimap.stored_area_idx = self.stored_area_idx
+            self.minimap.show_annotated_area(np.where(self.stored_area_idx))
 
 
     # Display handle
@@ -1293,7 +1298,7 @@ class Visualizer(ctk.CTk):
         scene.predictions[scene.active_source][anno.selected_polygon_area_idx] = class_color
         scene.predictions[scene.active_source][scene.landmasks[scene.active_source]] = [255, 255, 255]
 
-        self.minimap.show_annotated_area(anno.selected_polygon_area_idx, color=class_color)
+        self.minimap.show_annotated_area(anno.selected_polygon_area_idx)
 
         img_y_min, img_y_max, img_x_min, img_x_max = anno.selected_polygon_window
         img_y_min = max(0, img_y_min-20)

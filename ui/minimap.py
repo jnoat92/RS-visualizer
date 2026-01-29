@@ -2,6 +2,7 @@ import tkinter as tk
 import customtkinter as ctk
 from PIL import Image, ImageTk
 from collections import defaultdict
+import numpy as np
 
 class Minimap(ctk.CTkFrame):
     def __init__(self, parent, w=180, h=180, **kwargs):
@@ -16,6 +17,8 @@ class Minimap(ctk.CTkFrame):
         self.img_item = None
         self.viewport_item = self.canvas.create_rectangle(0, 0, 0, 0, outline="white", width=2)
 
+        self.stored_area_idx = None  # Store annotated area indices for saving
+
     def set_image(self, img):
         pil_img = Image.fromarray(img)
         pil_img.thumbnail((self.w, self.h), Image.Resampling.LANCZOS) # high-quality downsampling to fit image into minimap
@@ -23,6 +26,9 @@ class Minimap(ctk.CTkFrame):
         # Store original and minimap dimensions
         self.mini_img_w, self.mini_img_h = pil_img.size
         self.full_img_w, self.full_img_h = img.shape[1], img.shape[0]
+
+        if self.stored_area_idx is None:
+            self.stored_area_idx = np.zeros((self.full_img_h, self.full_img_w), dtype=np.uint8)
 
         minimap_img = ImageTk.PhotoImage(pil_img)
         self.tk_img_ref = minimap_img  # keep reference
@@ -85,11 +91,13 @@ class Minimap(ctk.CTkFrame):
         coord_rows = defaultdict(list)
         for x, y in zip(x_coords, y_coords):
             coord_rows[y].append(x)
+            self.stored_area_idx[y, x] = 1  # Mark annotated area
 
         return coord_rows
     
     def show_annotated_area(self, polygon_area_idx, color=[255,255,255]):
         color = "#{:02x}{:02x}{:02x}".format(*color)
+        minimap_coord_rows = {}
         if polygon_area_idx is not None:
             minimap_coord_rows = self.polygon_to_minimap_coords(polygon_area_idx)
 
@@ -121,3 +129,6 @@ class Minimap(ctk.CTkFrame):
                     prev = x
         self.canvas.tag_raise("annotated_area")
         self.canvas.tag_raise(self.viewport_item)
+
+    def save_annotated_area(self, filepath):
+        np.savez_compressed(filepath, area_idx=self.stored_area_idx)

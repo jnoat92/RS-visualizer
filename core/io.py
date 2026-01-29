@@ -114,7 +114,9 @@ def load_existing_annotation(scene_name):
     folder_path = os.path.join(folder_name, scene_name)
     file_path = folder_path + "/custom_annotation.png"
     notes_file_path = folder_name + "/annotation_notes.json"
+    annotated_area_path = folder_path + "/annotated_area.npz"
     notes = ""
+    minimap_area_idx = None
     if os.path.exists(folder_path) and os.path.exists(file_path):
         #print(folder_path)
         annotation_file = os.path.join(folder_path, "custom_annotation.png")
@@ -127,7 +129,15 @@ def load_existing_annotation(scene_name):
                         notes = existing_notes[scene_name].get("notes", "").strip()
                 except json.JSONDecodeError:
                     pass 
-        return custom_anno_variable, notes
+
+        if os.path.exists(annotated_area_path):
+            try:
+                data = np.load(annotated_area_path)
+                minimap_area_idx = data["area_idx"]
+            except Exception as e:
+                print("Error loading annotated area:", e)
+
+        return custom_anno_variable, notes, minimap_area_idx
     else:
-        return None, notes
+        return None, notes, minimap_area_idx
         
