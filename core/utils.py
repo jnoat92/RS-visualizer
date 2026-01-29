@@ -47,6 +47,7 @@ def blend_overlay(pred, img, boundmask, landmask, local_boundmask, alpha):
 def rgb2gray(rgb):
     return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
 
+# Optimize this
 def generate_boundaries(lbl):
     boundmask = np.zeros_like(lbl, dtype=bool)   
     for lvl in np.unique(lbl):

@@ -571,7 +571,8 @@ class Visualizer(ctk.CTk):
         display = self.app_state.display
         if val <= 20: # Initial state
             val = 0.0
-        display.contrast = (val/100)**2 * 0.25
+
+        display.contrast = (val/100) * 0.25
 
         if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
             HH_contrasted = enhance_outlier_slider(

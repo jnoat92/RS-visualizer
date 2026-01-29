@@ -151,18 +151,18 @@ def load_existing_annotation(scene_name):
 def load_rcm_product(data_dir):
     """
     Load and parse RCM (Radarsat Constellation Mission) SAR product data.
-    
+   
     Reads a single RCM product directory containing a dual-polarization SAR image
     (.img file with HH and HV bands) and its associated XML metadata file. Extracts
     polarimetric bands, georeferencing information, and product metadata.
-    
+   
     Parameters
     ----------
     data_dir : str or Path
         Path to the RCM product directory containing:
         - One .img file (HFA raster format with HH and HV bands)
         - One product.xml file (RCM metadata with geolocation and product info)
-    
+   
     Returns
     -------
     dict or None
@@ -174,27 +174,27 @@ def load_rcm_product(data_dir):
         - 'pixel_spacing': Dict with 'range_m' and 'azimuth_m' (meters)
         - 'geocoded_points': List of dicts with 'latitude' and 'longitude' (WGS84)
         - 'xml': Parsed XML root element (lxml Element)
-        
+       
         Returns None if loading fails, with error message printed to console.
-    
+   
     Raises
     ------
     ValueError
         If directory doesn't contain exactly one .img file or one product.xml file,
         or if .img file doesn't have exactly 2 bands.
     """
-
+ 
     img_file = list(Path(data_dir).glob("*.img"))
     xml_file = list(Path(data_dir).glob("product.xml"))
-
+ 
     if len(img_file) != 1:
         raise ValueError("expected one .img file")
     if len(xml_file) != 1:
         raise ValueError("expected one product.xml file")
     img_path = img_file[0]
     xml_file = xml_file[0]
-
-    
+ 
+   
     try:
         # read HH & HV
         with rasterio.open(img_path) as src:
@@ -205,44 +205,46 @@ def load_rcm_product(data_dir):
             src_transform = src.transform
             src_crs = src.crs
             src_bounds = src.bounds
-        
+            nodata_hh = src.nodatavals[0]
+            nodata_hv = src.nodatavals[1]
+       
         # parse product.xml
         xml_root = etree.parse(str(xml_file)).getroot()
         ns = {"rcm": xml_root.tag.split("}")[0].strip("{")}
-
+ 
         # metadata extraction
-
+ 
         # product ID
         product_id_elem = xml_root.find(".//rcm:productId", ns)
         product_id = (
             product_id_elem.text.strip() if product_id_elem is not None else None
         )
-
+ 
         # pixel spacing
         range_spacing_elem = xml_root.find(".//rcm:sampledPixelSpacing", ns)
         azimuth_spacing_elem = xml_root.find(".//rcm:sampledLineSpacing", ns)
-
+ 
         pixel_spacing = {
             "range_m": float(range_spacing_elem.text)
             if range_spacing_elem is not None else None,
             "azimuth_m": float(azimuth_spacing_elem.text)
             if azimuth_spacing_elem is not None else None,
         }
-
+ 
         # geocoded grid points (lon/lat)
         geocoded_points = []
         geodetic_coords = xml_root.findall(".//rcm:geodeticCoordinate", ns)
-
+ 
         for coord in geodetic_coords:
             lat = coord.find("rcm:latitude", ns)
             lon = coord.find("rcm:longitude", ns)
-
+ 
             if lat is not None and lon is not None:
                 geocoded_points.append({
                     "latitude": float(lat.text),
                     "longitude": float(lon.text)
                 })
-
+ 
         return {
             "folder_name": data_dir,
             "product_id": product_id,
@@ -253,9 +255,11 @@ def load_rcm_product(data_dir):
             "xml": xml_root,
             "src_transform": src_transform,
             "src_crs": src_crs,
-            "src_bounds": src_bounds
+            "src_bounds": src_bounds,
+            "nodata_hh": nodata_hh,
+            "nodata_hv": nodata_hv,
         }
-
+ 
     except Exception as e:
         print(f"Skipping {data_dir}: {e}")
         return None
@@ -274,11 +278,11 @@ def scale_hh_hv_to_200m(rcm_data, target_spacing_m=200):
         *rcm_data["src_bounds"],
         resolution=target_spacing_m
     )
-
+ 
     # allocate outputs
     hh_200m = np.empty((dst_height, dst_width), dtype=np.float32)
     hv_200m = np.empty((dst_height, dst_width), dtype=np.float32)
-
+ 
     # resample HH
     reproject(
         source=rcm_data["hh"],
@@ -287,9 +291,11 @@ def scale_hh_hv_to_200m(rcm_data, target_spacing_m=200):
         src_crs=rcm_data["src_crs"],
         dst_transform=dst_transform,
         dst_crs=rcm_data["src_crs"],
-        resampling=Resampling.average
+        resampling=Resampling.average,
+        src_nodata=rcm_data["nodata_hh"],
+        dst_nodata=np.nan
     )
-
+ 
     # resample HV
     reproject(
         source=rcm_data["hv"],
@@ -298,14 +304,16 @@ def scale_hh_hv_to_200m(rcm_data, target_spacing_m=200):
         src_crs=rcm_data["src_crs"],
         dst_transform=dst_transform,
         dst_crs=rcm_data["src_crs"],
-        resampling=Resampling.average
+        resampling=Resampling.average,
+        src_nodata=rcm_data["nodata_hv"],
+        dst_nodata=np.nan
     )
-
+ 
     # # create output folder inside product_dir
     # out_dir = product_dir / "200m_pixel_spacing"
     # out_dir.mkdir(exist_ok=True)
     # out_path = out_dir / (img_path.stem + "_200m.img")
-
+ 
     # # save unified .img
     # with rasterio.open(
     #     out_path,
@@ -322,7 +330,7 @@ def scale_hh_hv_to_200m(rcm_data, target_spacing_m=200):
     #     dst.write(hv_200m, 2)
     #     dst.set_band_description(1, "HH")
     #     dst.set_band_description(2, "HV")
-
+ 
     return {"hh": hh_200m, "hv": hv_200m, "transform": dst_transform}
 
 def load_rcm_base_images(data_dir):
