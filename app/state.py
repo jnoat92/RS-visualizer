@@ -48,6 +48,7 @@ class SceneState:
     bands: dict[str, int] = field(default_factory=dict)
     hist: dict[str, np.ndarray] = field(default_factory=dict)
     n_valid: dict[str, np.ndarray] = field(default_factory=dict)
+    rcm_200m_data: dict[str, np.ndarray] = None
 
     predictions: dict[str, np.ndarray] = field(default_factory=dict)
     landmasks: dict[str, np.ndarray] = field(default_factory=dict)

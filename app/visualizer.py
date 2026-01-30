@@ -17,7 +17,7 @@ from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
 from ui.minimap import Minimap
 from core.utils import rgb2gray, generate_boundaries
-from core.io import load_prediction, load_existing_annotation, load_base_images, load_rcm_base_images
+from core.io import load_prediction, load_existing_annotation, load_base_images, load_rcm_base_images, run_pred_model
 from core.segmentation import get_segment_contours, IRGS
 from core.overlay import compose_overlay
 from core.render import crop_resize, layer_imagery
@@ -369,7 +369,10 @@ class Visualizer(ctk.CTk):
         scene.landmasks = {}
         scene.boundmasks = {}
 
-        variables = load_prediction(scene.folder_path, scene.filenames, scene.lbl_sources, img_shape=scene.orig_img["HH"].shape)
+        if scene.folder_path.split("/")[-1].startswith("RCM"):
+            variables = run_pred_model(scene.lbl_sources[0], scene.rcm_200m_data, model_path='model/Unet_model_12_.pt', device='cpu')
+        else:
+            variables = load_prediction(scene.folder_path, scene.filenames, scene.lbl_sources, img_shape=scene.orig_img["HH"].shape)
         existing_anno, anno.annotation_notes, self.stored_area_idx = load_existing_annotation(scene.scene_name)
 
         if existing_anno is not None:
@@ -480,7 +483,7 @@ class Visualizer(ctk.CTk):
             self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
 
             if scene.scene_name.startswith("RCM"):
-                raw_img, orig_img, hist, n_valid, nan_mask = load_rcm_base_images(scene.folder_path)
+                raw_img, orig_img, hist, n_valid, nan_mask, rcm_200m_data = load_rcm_base_images(scene.folder_path)
             else:
                 raw_img, orig_img, hist, n_valid, nan_mask = load_base_images(scene.folder_path)
             # Save raw images to app state for later use (e.g., layering)
@@ -489,8 +492,9 @@ class Visualizer(ctk.CTk):
             scene.hist = hist
             scene.n_valid = n_valid
             scene.nan_mask = nan_mask
+            scene.rcm_200m_data = rcm_200m_data if scene.scene_name.startswith("RCM") else None
 
-            if isinstance(raw_img, FileNotFoundError):
+            if isinstance(raw_img, FileNotFoundError) or isinstance(raw_img, ValueError):
                 messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{raw_img}", parent=self.master)
                 scene.folder_path = ''
                 return
@@ -953,6 +957,9 @@ class Visualizer(ctk.CTk):
             img_x_max = min(scene.img.shape[1], img_x_max)
             img_y_max = min(scene.img.shape[0], img_y_max)
 
+            if img_x_max < 0 or img_y_max < 0 or img_x_min < 0 or img_y_min < 0:
+                return  # invalid selection
+
             self.zoom_to_rectangle(img_x_min, img_y_min, img_x_max, img_y_max)
 
         elif overlay.select_local_segmentation and self.selection_start_coord:
@@ -981,6 +988,9 @@ class Visualizer(ctk.CTk):
             img_y_min = max(0, img_y_min)
             img_x_max = min(scene.img.shape[1], img_x_max)
             img_y_max = min(scene.img.shape[0], img_y_max)
+
+            if img_x_max < 0 or img_y_max < 0 or img_x_min < 0 or img_y_min < 0:
+                return  # invalid selection
 
             self.select_local_segmentation_area(img_x_min, img_y_min, img_x_max, img_y_max)
         

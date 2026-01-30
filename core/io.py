@@ -15,6 +15,8 @@ from lxml import etree
 from pathlib import Path
 import cv2
 from rasterio.warp import reproject, Resampling, calculate_default_transform
+import torch
+from model.model_helper import Normalize_min_max, load_model, forward_model
 
 from core.utils import rgb2gray, generate_boundaries, prepare_sorted_data_numba
 from core.parallel_stuff import Parallel
@@ -76,7 +78,7 @@ def load_base_images(folder_path):
         HV = np.asarray(Image.open(folder_path + "/imagery_HV_UW_4_by_4_average.tif"))
 
     except FileNotFoundError as e:
-        return e, {}, {}, {}, {}, {}, {}
+        return e, {}, {}, {}, {}
 
     return setup_base_images(HH, HV)
 
@@ -344,22 +346,46 @@ def scale_hh_hv_to_200m(rcm_data, target_spacing_m=200):
 
 def load_rcm_base_images(data_dir):
 
-    rcm_data = load_rcm_product(data_dir)
-    img_base = scale_hh_hv_to_200m(rcm_data, target_spacing_m=200)
-    hh = img_base["hh"]
-    hv = img_base["hv"]
+    try:
+        rcm_data = load_rcm_product(data_dir)
+    except ValueError as e:
+        return e, {}, {}, {}, {}, {}
+    
+    rcm_200m_data = scale_hh_hv_to_200m(rcm_data, target_spacing_m=200)
+    hh = rcm_200m_data["hh"]
+    hv = rcm_200m_data["hv"]
 
     # Normalize HH band to uint8 for visualization
-    land_nan_mask_hh = np.isnan(hh)
-    min_ = hh[~land_nan_mask_hh].min(0)
-    max_ = hh[~land_nan_mask_hh].max(0)
+    nan_mask_hh = np.isnan(hh)
+    min_ = hh[~nan_mask_hh].min(0)
+    max_ = hh[~nan_mask_hh].max(0)
     hh = np.uint8(255*((hh - min_) / (max_ - min_)))
 
     # Normalize HV band to uint8 for visualization
-    land_nan_mask_hv = np.isnan(hv)
-    min_ = hv[~land_nan_mask_hv].min(0)
-    max_ = hv[~land_nan_mask_hv].max(0)
+    nan_mask_hv = np.isnan(hv)
+    min_ = hv[~nan_mask_hv].min(0)
+    max_ = hv[~nan_mask_hv].max(0)
     hv = np.uint8(255*((hv - min_) / (max_ - min_)))
 
     raw_img, img_base, hist, n_valid, nan_mask = setup_base_images(hh, hv)
-    return raw_img, img_base, hist, n_valid, nan_mask
+    return raw_img, img_base, hist, n_valid, nan_mask, rcm_200m_data
+
+def run_pred_model(lbl_source, img, model_path, device='cpu'):
+    valid_mask = ~np.isnan(img["hh"])
+    img_norm = Normalize_min_max(np.stack([img["hh"], img["hv"]], axis=-1),
+                             valid_mask=valid_mask)
+    device= 'cpu'   #state variable
+    img_norm = torch.permute(torch.Tensor(img_norm[None, ...]).to(device), (0, 3, 1, 2)).float()
+
+    model = load_model(model_path, device='cpu')
+
+    colored_pred_map = forward_model(model, img_norm, nan_mask=valid_mask) # make sure nan_mask is passed
+
+    landmask = (colored_pred_map == [255, 255, 255]).all(axis=2)
+
+    boundmask = generate_boundaries(rgb2gray(colored_pred_map))
+
+    # Save colored_pred_map
+    Image.fromarray(colored_pred_map).save("model_prediction.png")
+
+    return [(lbl_source, colored_pred_map, landmask, boundmask)]
