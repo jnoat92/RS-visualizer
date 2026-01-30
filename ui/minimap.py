@@ -1,6 +1,8 @@
 import tkinter as tk
 import customtkinter as ctk
 from PIL import Image, ImageTk
+from collections import defaultdict
+import numpy as np
 
 class Minimap(ctk.CTkFrame):
     def __init__(self, parent, w=180, h=180, **kwargs):
@@ -15,6 +17,8 @@ class Minimap(ctk.CTkFrame):
         self.img_item = None
         self.viewport_item = self.canvas.create_rectangle(0, 0, 0, 0, outline="white", width=2)
 
+        self.stored_area_idx = None # Store annotated area indices for saving
+
     def set_image(self, img):
         pil_img = Image.fromarray(img.astype('uint8'))
         pil_img.thumbnail((self.w, self.h), Image.Resampling.LANCZOS) # high-quality downsampling to fit image into minimap
@@ -22,6 +26,9 @@ class Minimap(ctk.CTkFrame):
         # Store original and minimap dimensions
         self.mini_img_w, self.mini_img_h = pil_img.size
         self.full_img_w, self.full_img_h = img.shape[1], img.shape[0]
+
+        if self.stored_area_idx is None:
+            self.stored_area_idx = np.zeros((self.full_img_h, self.full_img_w), dtype=np.uint8)
 
         minimap_img = ImageTk.PhotoImage(pil_img)
         self.tk_img_ref = minimap_img  # keep reference
@@ -76,4 +83,97 @@ class Minimap(ctk.CTkFrame):
 
         return view_top, view_bottom, view_left, view_right
         
+    def polygon_to_minimap_coords(self, polygon_points):
+        # Recieve polygon points as (y_coords, x_coords)
+        y_coords, x_coords = polygon_points
 
+        # Might be slower for large polygons, but easier to group by rows and display
+        coord_rows = defaultdict(list)
+        for x, y in zip(x_coords, y_coords):
+            coord_rows[y].append(x)
+
+        return coord_rows
+    
+    def show_annotated_area(self, polygon_area_idx, color=[255,255,255]):
+        color = "#{:02x}{:02x}{:02x}".format(*color)
+        if polygon_area_idx is not None:
+            minimap_coord_rows = self.polygon_to_minimap_coords(polygon_area_idx)
+
+            # Scale factors
+            sx = self.mini_img_w / self.full_img_w
+            sy = self.mini_img_h / self.full_img_h
+
+            # Offset factors to center minimap image
+            offset_x = (self.w - self.mini_img_w) / 2
+            offset_y = (self.h - self.mini_img_h) / 2
+
+            for y, xlist in minimap_coord_rows.items():
+                xlist.sort()
+
+                # compress each row into continuous segments
+                start = prev = xlist[0]
+                for x in xlist[1:] + [None]:
+                    if x != prev + 1:
+                        mx0 = start * sx + offset_x
+                        mx1 = (prev + 1) * sx + offset_x
+                        my0 = y * sy + offset_y
+                        my1 = (y + 1) * sy + offset_y
+                        self.canvas.create_rectangle(
+                            mx0, my0, mx1, my1,
+                            fill=color, outline="",
+                            tags=("annotated_area",)
+                        )
+                        start = x
+                    prev = x
+        self.canvas.tag_raise("annotated_area")
+        self.canvas.tag_raise(self.viewport_item)
+
+    def polygon_to_minimap_coords(self, polygon_points):
+        # Recieve polygon points as (y_coords, x_coords)
+        y_coords, x_coords = polygon_points
+
+        # Might be slower for large polygons, but easier to group by rows and display
+        coord_rows = defaultdict(list)
+        for x, y in zip(x_coords, y_coords):
+            coord_rows[y].append(x)
+            self.stored_area_idx[y, x] = 1  # Mark annotated area
+
+        return coord_rows
+
+    def show_annotated_area(self, polygon_area_idx, color=[255,255,255]):
+        color = "#{:02x}{:02x}{:02x}".format(*color)
+        minimap_coord_rows = {}
+        if polygon_area_idx is not None:
+            minimap_coord_rows = self.polygon_to_minimap_coords(polygon_area_idx)
+
+            # Scale factors
+            sx = self.mini_img_w / self.full_img_w
+            sy = self.mini_img_h / self.full_img_h
+
+            # Offset factors to center minimap image
+            offset_x = (self.w - self.mini_img_w) / 2
+            offset_y = (self.h - self.mini_img_h) / 2
+
+            for y, xlist in minimap_coord_rows.items():
+                xlist.sort()
+
+                # compress each row into continuous segments
+                start = prev = xlist[0]
+                for x in xlist[1:] + [None]:
+                    if x != prev + 1:
+                        mx0 = start * sx + offset_x
+                        mx1 = (prev + 1) * sx + offset_x
+                        my0 = y * sy + offset_y
+                        my1 = (y + 1) * sy + offset_y
+                        self.canvas.create_rectangle(
+                            mx0, my0, mx1, my1,
+                            fill=color, outline="",
+                            tags=("annotated_area",)
+                        )
+                        start = x
+                    prev = x
+        self.canvas.tag_raise("annotated_area")
+        self.canvas.tag_raise(self.viewport_item)
+
+    def save_annotated_area(self, filepath):
+        np.savez_compressed(filepath, area_idx=self.stored_area_idx)
