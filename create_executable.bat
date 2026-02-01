@@ -4,7 +4,7 @@ REM Build executable for SeaIceMap (PyInstaller)
 REM ============================================
 
 REM ---- Your chosen output root (OneDrive path) ----
-set ROOT="C:\Users\kev80\OneDrive\Documents\Coop-w26\SeaIceMap-executable"
+set ROOT="Your_path\SeaIceMap-executable"
 
 echo Cleaning previous build...
 
@@ -23,14 +23,18 @@ if exist build\SeaIceMap (
 echo.
 echo Starting PyInstaller build...
 
-pyinstaller visualizer.py ^
+pyinstaller main.py ^
   --onedir ^
   --windowed ^
   --name SeaIceMap ^
   --distpath %ROOT% ^
   --add-data "icons;icons" ^
+  --add-data "model;model" ^
   --noconfirm ^
-  --clean
+  --clean ^
+  --hidden-import rasterio.serde ^
+  --collect-submodules rasterio ^
+  --collect-data rasterio
 
 echo.
 echo ============================================

@@ -17,7 +17,7 @@ from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
 from ui.minimap import Minimap
 from core.utils import rgb2gray, generate_boundaries
-from core.io import load_prediction, load_existing_annotation, load_base_images, load_rcm_base_images, run_pred_model
+from core.io import load_prediction, load_existing_annotation, load_base_images, load_rcm_base_images, run_pred_model, resource_path
 from core.segmentation import get_segment_contours, IRGS
 from core.overlay import compose_overlay
 from core.render import crop_resize, layer_imagery
@@ -370,7 +370,8 @@ class Visualizer(ctk.CTk):
         scene.boundmasks = {}
 
         if scene.folder_path.split("/")[-1].startswith("RCM"):
-            variables = run_pred_model(scene.lbl_sources[0], scene.rcm_200m_data, model_path='model/Unet_model_12_.pt', device='cpu')
+            model_path = resource_path("model/Unet_model_12_.pt")
+            variables = run_pred_model(scene.lbl_sources[0], scene.rcm_200m_data, model_path=model_path, device='cpu')
         else:
             variables = load_prediction(scene.folder_path, scene.filenames, scene.lbl_sources, img_shape=scene.orig_img["HH"].shape)
         existing_anno, anno.annotation_notes, self.stored_area_idx = load_existing_annotation(scene.scene_name)

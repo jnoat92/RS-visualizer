@@ -98,7 +98,6 @@ def setup_base_images(HH, HV):
     hist = {}
     n_valid = {}
     for img_type in img_base.keys():
-        print("Preparing hist for", img_type)
         hist[img_type], n_valid[img_type] = precompute_valid_hist_u8(img_base[img_type], valid_mask=~nan_mask[img_type])
     return raw_img, img_base, hist, n_valid, nan_mask
 
@@ -359,13 +358,29 @@ def load_rcm_base_images(data_dir):
     nan_mask_hh = np.isnan(hh)
     min_ = hh[~nan_mask_hh].min(0)
     max_ = hh[~nan_mask_hh].max(0)
-    hh = np.uint8(255*((hh - min_) / (max_ - min_)))
+    hh_u8 = np.zeros_like(hh, dtype=np.uint8)
+
+    if max_ > min_:
+        hh_u8[~nan_mask_hh] = np.clip(
+            255 * (hh[~nan_mask_hh] - min_) / (max_ - min_),
+            0, 255
+        ).astype(np.uint8)
+
+    hh = hh_u8
 
     # Normalize HV band to uint8 for visualization
     nan_mask_hv = np.isnan(hv)
     min_ = hv[~nan_mask_hv].min(0)
     max_ = hv[~nan_mask_hv].max(0)
-    hv = np.uint8(255*((hv - min_) / (max_ - min_)))
+    hv_u8 = np.zeros_like(hv, dtype=np.uint8)
+
+    if max_ > min_:
+        hv_u8[~nan_mask_hv] = np.clip(
+            255 * (hv[~nan_mask_hv] - min_) / (max_ - min_),
+            0, 255
+        ).astype(np.uint8)
+
+    hv = hv_u8
 
     raw_img, img_base, hist, n_valid, nan_mask = setup_base_images(hh, hv)
     return raw_img, img_base, hist, n_valid, nan_mask, rcm_200m_data
