@@ -10,7 +10,7 @@ from core.utils import apply_brightness
 # import time
 
 # TO DO: Optimize as it is the bottleneck for performance when changing contrast/brightness and during panning/zooming
-def crop_resize(pred, img, boundmask, landmask, local_boundmask, zoom_factor, offset_x, offset_y, brightness,canvas_width, canvas_height, show_local_segmentation):
+def crop_resize(pred, img, boundmask, landmask, local_boundmask, nan_mask, zoom_factor, offset_x, offset_y, brightness,canvas_width, canvas_height, show_local_segmentation):
     #crop = self.get_zoomed_region(self.pred)
     # start_time = time.perf_counter()
     crop = get_zoomed_region(pred, zoom_factor, offset_x, offset_y, canvas_width, canvas_height)
@@ -38,7 +38,7 @@ def crop_resize(pred, img, boundmask, landmask, local_boundmask, zoom_factor, of
     img_crop = img[view_top:view_bottom, view_left:view_right].astype(np.float32)
     boundmask_crop = boundmask[view_top:view_bottom, view_left:view_right]
     landmask_crop = landmask[view_top:view_bottom, view_left:view_right]
-
+    nan_mask_crop = nan_mask[view_top:view_bottom, view_left:view_right]
     # end_crop_time = time.perf_counter()
     # print(f"Time to crop images: {end_crop_time - start_crop_time:.6f} seconds")
 
@@ -52,6 +52,7 @@ def crop_resize(pred, img, boundmask, landmask, local_boundmask, zoom_factor, of
     img_resized = cv2.resize(img_crop, (zoomed_width, zoomed_height), interpolation=cv2.INTER_LINEAR)
     boundmask_resized = cv2.resize(boundmask_crop.astype(np.uint8), (zoomed_width, zoomed_height), interpolation=cv2.INTER_NEAREST).astype(bool)
     landmask_resized = cv2.resize(landmask_crop.astype(np.uint8), (zoomed_width, zoomed_height), interpolation=cv2.INTER_NEAREST).astype(bool)
+    nan_mask_resized = cv2.resize(nan_mask_crop.astype(np.uint8), (zoomed_width, zoomed_height), interpolation=cv2.INTER_NEAREST).astype(bool)
 
     # end_resize_time = time.perf_counter()
     # print(f"Time to resize images: {end_resize_time - start_resize_time:.6f} seconds")
@@ -69,7 +70,7 @@ def crop_resize(pred, img, boundmask, landmask, local_boundmask, zoom_factor, of
 
     # brightness_adjust_time = time.perf_counter()
 
-    img_resized = apply_brightness(img_resized, brightness, clip=True)
+    img_resized = apply_brightness(img_resized, nan_mask_resized, brightness, clip=True)
 
     # end_brightness_adjust_time = time.perf_counter()
     # print(f"Time to adjust brightness: {end_brightness_adjust_time - brightness_adjust_time:.6f} seconds")

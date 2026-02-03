@@ -63,7 +63,7 @@ def generate_boundaries(lbl):
     return boundmask
 
 @njit(parallel=True)
-def apply_brightness(image, brightness=0.0, clip=True):
+def apply_brightness(image, nan_mask, brightness=0.0, clip=True):
     # Adjust brightness
     h, w, c = image.shape
     adjusted = np.empty((h, w, c), dtype=np.float32)
@@ -71,7 +71,10 @@ def apply_brightness(image, brightness=0.0, clip=True):
     for y in prange(h):
         for x in range(w):
             for ch in range(c):
-                adjusted[y, x, ch] = image[y, x, ch] + brightness * 128
+                if nan_mask[y, x]:
+                    adjusted[y, x, ch] = image[y, x, ch]
+                else:
+                    adjusted[y, x, ch] = image[y, x, ch] + brightness * 128
 
     if clip:
         for y in prange(h):

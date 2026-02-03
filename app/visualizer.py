@@ -447,7 +447,7 @@ class Visualizer(ctk.CTk):
         # NEXT STEP: Group the returns, and optimize crop_resize, right now it's the bottleneck for performance on contrast change
         self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, self.local_boundmask_resized, self.draw_x, self.draw_y = crop_resize(
                     scene.predictions[scene.active_source], scene.img, scene.boundmasks[scene.active_source], scene.land_nan_masks[scene.active_source], 
-                    overlay.local_segmentation_bounds, view.zoom_factor, view.offset_x, view.offset_y, display.brightness,
+                    overlay.local_segmentation_bounds, scene.nan_mask["HH"], view.zoom_factor, view.offset_x, view.offset_y, display.brightness,
                     self.canvas.winfo_width(), self.canvas.winfo_height(), overlay.show_local_segmentation)
         self.set_overlay()
         self.display_image()
