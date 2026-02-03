@@ -1057,6 +1057,15 @@ class Visualizer(ctk.CTk):
             if overlay.show_local_segmentation:
                 # Change scene.predictions to local irgs for unsupervised segmentation
                 contours, mask = get_segment_contours(overlay.local_segmentation_mask, y, x)
+
+                # Check if selected segment includes border region
+                for i in range(len(contours)):
+                    for j in range(len(contours[i])):
+                        if contours[i][j][1] <= overlay.local_segmentation_limits[0]+0.5 or contours[i][j][1] >= overlay.local_segmentation_limits[2]-0.5 or \
+                            contours[i][j][0] <= overlay.local_segmentation_limits[1]+0.5 or contours[i][j][0] >= overlay.local_segmentation_limits[3]-0.5:
+                            messagebox.showinfo("Error", "Selected segment includes local segmentation border. Please select a segment fully within the local segmentation area.", parent=self.master)
+                            self.reset_annotation()
+                            return
             else:
                 # Change scene,predictions to irgs for unsupervised segmentation
                 contours, mask = get_segment_contours(scene.predictions[scene.active_source], y, x)
