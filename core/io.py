@@ -22,7 +22,7 @@ from shapely.ops import unary_union
 import torch
 from model.model_helper import Normalize_min_max, load_model, forward_model
 
-from core.utils import rgb2gray, generate_boundaries, prepare_sorted_data_numba
+from core.utils import rgb2gray, generate_boundaries
 from core.parallel_stuff import Parallel
 from core.contrast_handler import precompute_valid_hist_u8
 
@@ -48,44 +48,6 @@ def PredictionLoader(iterator, resize=False, img_shape=None):
 
     return key, pred, landmask, boundmask
 
-
-# Should change the file path to be more robust, possibly reading a template file to find the images to grab
-def load_images(folder_path):
-
-    try:
-        HH = np.asarray(Image.open(folder_path + "/imagery_HH_UW_4_by_4_average.tif")) 
-        HV = np.asarray(Image.open(folder_path + "/imagery_HV_UW_4_by_4_average.tif"))
-
-        HH_better_contrast = np.asarray(Image.open(folder_path + "/enhanced_images/imagery_HH_UW_4_by_4_average.png"))
-        HV_better_contrast = np.asarray(Image.open(folder_path + "/enhanced_images/imagery_HV_UW_4_by_4_average.png"))
-
-    except FileNotFoundError as e:
-        return e
-
-    img_base = {}
-    img_base["HH"] = np.tile(HH[:,:,np.newaxis], (1,1,3))
-    img_base["HV"] = np.tile(HV[:,:,np.newaxis], (1,1,3))
-    img_base["(HH, HH, HV)"] = np.stack([HH, HH, HV], axis=-1)
-    img_base["(HH, HV, HV)"] = np.stack([HH, HV, HV], axis=-1)
-
-    img_better_contrast = {}
-    img_better_contrast["HH"] = np.tile(HH_better_contrast[:,:,np.newaxis], (1,1,3))
-    img_better_contrast["HV"] = np.tile(HV_better_contrast[:,:,np.newaxis], (1,1,3))
-    img_better_contrast["(HH, HH, HV)"] = np.stack([HH_better_contrast, HH_better_contrast, HV_better_contrast], axis=-1)
-    img_better_contrast["(HH, HV, HV)"] = np.stack([HH_better_contrast, HV_better_contrast, HV_better_contrast], axis=-1)
-
-    return (img_base, img_better_contrast)
-
-def load_base_images(folder_path):
-    try:
-        HH = np.asarray(Image.open(folder_path + "/imagery_HH_UW_4_by_4_average.tif")) 
-        HV = np.asarray(Image.open(folder_path + "/imagery_HV_UW_4_by_4_average.tif"))
-
-    except FileNotFoundError as e:
-        return e, {}, {}, {}, {}
-
-    return setup_base_images(HH, HV)
-
 def setup_base_images(HH, HV, nan_mask_hh, nan_mask_hv):
     raw_img = {}
     raw_img["HH"] = HH
@@ -105,7 +67,7 @@ def setup_base_images(HH, HV, nan_mask_hh, nan_mask_hv):
         hist[img_type], n_valid[img_type] = precompute_valid_hist_u8(img_base[img_type], valid_mask=~nan_mask[img_type])
     return raw_img, img_base, hist, n_valid, nan_mask
 
-
+# Keeping for future when we have more models
 def load_prediction(folder_path, filenames, lbl_source, img_shape):
     resize_img = False
     file_names = [folder_path + f for f in filenames]

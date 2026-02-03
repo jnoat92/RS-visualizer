@@ -1,8 +1,6 @@
 import cv2
 import numpy as np
 
-from core.utils import scale_channels_inplace
-
 def prepare_sorted_data(img, valid_mask=None):
     """
     Precompute sorted per-channel values for fast O(1) percentile queries.

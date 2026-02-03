@@ -17,7 +17,7 @@ from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
 from ui.minimap import Minimap
 from core.utils import rgb2gray, generate_boundaries
-from core.io import load_prediction, load_existing_annotation, load_base_images, load_rcm_base_images, run_pred_model, resource_path
+from core.io import load_existing_annotation, load_rcm_base_images, run_pred_model, resource_path
 from core.segmentation import get_segment_contours, IRGS
 from core.overlay import compose_overlay
 from core.render import crop_resize, layer_imagery
@@ -369,11 +369,8 @@ class Visualizer(ctk.CTk):
         scene.land_nan_masks = {}
         scene.boundmasks = {}
 
-        if scene.folder_path.split("/")[-1].startswith("RCM"):
-            model_path = resource_path("model/Unet_model_12_.pt")
-            variables = run_pred_model(scene.lbl_sources[0], scene.rcm_200m_data, scene.base_land_mask, model_path=model_path, device='cpu')
-        else:
-            variables = load_prediction(scene.folder_path, scene.filenames, scene.lbl_sources, img_shape=scene.orig_img["HH"].shape)
+        model_path = resource_path("model/Unet_model_12_.pt")
+        variables = run_pred_model(scene.lbl_sources[0], scene.rcm_200m_data, scene.base_land_mask, model_path=model_path, device='cpu')
         existing_anno, anno.annotation_notes, self.stored_area_idx = load_existing_annotation(scene.scene_name)
 
         if existing_anno is not None:
@@ -483,18 +480,16 @@ class Visualizer(ctk.CTk):
 
             self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
 
-            if scene.scene_name.startswith("RCM"):
-                raw_img, orig_img, hist, n_valid, nan_mask, land_mask, rcm_200m_data = load_rcm_base_images(scene.folder_path)
-            else:
-                raw_img, orig_img, hist, n_valid, nan_mask = load_base_images(scene.folder_path)        
+            # Load base images
+            raw_img, orig_img, hist, n_valid, nan_mask, land_mask, rcm_200m_data = load_rcm_base_images(scene.folder_path)       
             # Save raw images to app state for later use (e.g., layering)
             scene.raw_img = raw_img
             scene.orig_img = orig_img
             scene.hist = hist
             scene.n_valid = n_valid
             scene.nan_mask = nan_mask
-            scene.base_land_mask = land_mask if scene.scene_name.startswith("RCM") else None
-            scene.rcm_200m_data = rcm_200m_data if scene.scene_name.startswith("RCM") else None
+            scene.base_land_mask = land_mask
+            scene.rcm_200m_data = rcm_200m_data
 
             if isinstance(raw_img, FileNotFoundError) or isinstance(raw_img, ValueError):
                 messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{raw_img}", parent=self.master)
