@@ -81,6 +81,7 @@ class Visualizer(ctk.CTk):
 
         self.canvas.bind("<Button-3>", self.on_right_click)
         self.canvas.bind("<Double-Button-1>", self.on_double_click)
+        self.canvas.bind("<Motion>", self.on_mouse_move)
 
 
         # ==================== CONTROL PANELS (STACKED VERTICALLY)
@@ -315,11 +316,15 @@ class Visualizer(ctk.CTk):
         self.sidebar.grid_columnconfigure(0, weight=1)
 
         # Minimap in bottom-right corner of canvas
-        self.minimap_frame = ctk.CTkFrame(self.canvas, width=180, height=180, corner_radius=12)
-        self.minimap = Minimap(self.minimap_frame, w=180, h=180)
+        self.minimap_frame = ctk.CTkFrame(self.canvas, width=200, height=200, corner_radius=12)
+        self.minimap = Minimap(self.minimap_frame, w=200, h=200)
         self.minimap.pack(fill="both", expand=True)
         self.minimap_window_id = self.canvas.create_window(0, 0, window=self.minimap_frame, anchor="se", tags=("minimap"))
         self.canvas.bind("<Configure>", self._update_minimap_position)
+        
+        # Coords on top of minimap
+        self.status_bar = ctk.CTkLabel(self.minimap_frame, width=200,text="-, -", bg_color="black", text_color="white", font=ctk.CTkFont(size=10))
+        self.status_bar.pack(fill="both", expand=True)
 
 
         #%% INITIAL VISUALIZATION / STATE
@@ -481,7 +486,7 @@ class Visualizer(ctk.CTk):
             self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
 
             # Load base images
-            raw_img, orig_img, hist, n_valid, nan_mask, land_mask, rcm_200m_data = load_rcm_base_images(scene.folder_path)       
+            raw_img, orig_img, hist, n_valid, nan_mask, land_mask, rcm_200m_data, geo_coords = load_rcm_base_images(scene.folder_path)       
             # Save raw images to app state for later use (e.g., layering)
             scene.raw_img = raw_img
             scene.orig_img = orig_img
@@ -490,6 +495,7 @@ class Visualizer(ctk.CTk):
             scene.nan_mask = nan_mask
             scene.base_land_mask = land_mask
             scene.rcm_200m_data = rcm_200m_data
+            scene.geocoded_points = geo_coords
 
             if isinstance(raw_img, FileNotFoundError) or isinstance(raw_img, ValueError):
                 messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{raw_img}", parent=self.master)
@@ -1056,7 +1062,6 @@ class Visualizer(ctk.CTk):
                     for j in range(len(contours[i])):
                         if contours[i][j][1] <= overlay.local_segmentation_limits[0]+0.5 or contours[i][j][1] >= overlay.local_segmentation_limits[2]-0.5 or \
                             contours[i][j][0] <= overlay.local_segmentation_limits[1]+0.5 or contours[i][j][0] >= overlay.local_segmentation_limits[3]-0.5:
-                            messagebox.showinfo("Error", "Selected segment includes local segmentation border. Please select a segment fully within the local segmentation area.", parent=self.master)
                             self.reset_annotation()
                             return
             else:
@@ -1081,6 +1086,26 @@ class Visualizer(ctk.CTk):
             anno.polygon_points_img_coor = [[(x, y) for y, x in c] for c in contours]
             anno.multiple_polygons = True
             self.draw_polygon_on_canvas()
+
+    def on_mouse_move(self, event):
+        view = self.app_state.view
+        scene = self.app_state.scene
+        x = int((event.x - view.offset_x) / view.zoom_factor)
+        y = int((event.y - view.offset_y) / view.zoom_factor)
+
+        # Check if coordinates are nan or out of bounds
+        if scene.img is not None:
+            h, w = scene.predictions[scene.active_source].shape[:2]
+            if not (0 <= x < w and 0 <= y < h):
+                self.status_bar.configure(text=f"Lat: N/A, Lon: N/A")
+            # elif scene.nan_mask["HH"][y, x]:
+            #     self.status_bar.configure(text=f"Lat: N/A, Lon: N/A")
+            else:
+                lat = scene.geocoded_points['latitude'][y, x]
+                lon = scene.geocoded_points['longitude'][y, x]
+                lat_dms = self.decimal_to_dms(lat, is_latitude=True)
+                lon_dms = self.decimal_to_dms(lon, is_latitude=False)
+                self.status_bar.configure(text=f"Lat: {lat:.4f}, Lon: {lon:.4f}\n{lat_dms}, {lon_dms}\n Pixel: ({x}, {y})")
 
 
     # Operations
@@ -1397,6 +1422,35 @@ class Visualizer(ctk.CTk):
 
 
     # Misc
+
+    def decimal_to_dms(self, decimal_degree, is_latitude=True):
+        """
+        Convert decimal degrees to degrees, minutes, seconds (DMS) format.
+        """
+        try:
+            if not isinstance(decimal_degree, (int, float)):
+                raise ValueError("Coordinate must be a number.")
+
+            # Determine hemisphere
+            if is_latitude:
+                hemisphere = 'N' if decimal_degree >= 0 else 'S'
+            else:
+                hemisphere = 'E' if decimal_degree >= 0 else 'W'
+
+            # Absolute value for calculation
+            abs_val = abs(decimal_degree)
+
+            # Degrees
+            degrees = int(abs_val)
+            # Minutes
+            minutes_full = (abs_val - degrees) * 60
+            minutes = int(minutes_full)
+            # Seconds
+            seconds = (minutes_full - minutes) * 60
+
+            return f"{degrees}°{minutes}'{seconds:.2f}\" {hemisphere}"
+        except Exception as e:
+            return f"Error: {e}"
 
     def _set_all_children_enabled(self, parent, enabled=True, exclude=[]):
         state = ctk.NORMAL if enabled else ctk.DISABLED

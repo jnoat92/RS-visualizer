@@ -57,6 +57,9 @@ class SceneState:
     # Store base land mask for RCM scenes
     base_land_mask: np.ndarray = None
 
+    # Store geocoded bounds
+    geocoded_points: dict[str, float] = field(default_factory=dict)
+
     # Store currently selected prediction
     active_source: str = ""
 
