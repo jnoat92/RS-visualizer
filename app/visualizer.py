@@ -13,7 +13,6 @@ import numpy as np
 import cv2
 import os
 from rasterio.transform import xy
-from time import sleep
 
 from ui.evaluation import EvaluationPanel
 from ui.annotation import AnnotationPanel
@@ -519,7 +518,7 @@ class Visualizer(ctk.CTk):
             try:
                 rcm_data = load_rcm_product(scene.folder_path)
             except (FileNotFoundError, ValueError) as e:
-                messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{raw_img}", parent=self.master)
+                messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{e}", parent=self.master)
                 scene.folder_path = ''
                 self.loading_bar.set(0) # Update loading bar after loading images
                 self.loading_bar_label.configure(text="Error loading images")
@@ -595,10 +594,8 @@ class Visualizer(ctk.CTk):
         self.loading_bar_label.configure(text="Inference complete")
         self.update_idletasks()
 
-        sleep(2)
-
-        self.loading_bar_label.grid_remove() # Hide loading bar after short delay
-        self.loading_bar.grid_remove() # Hide loading bar after short delay
+        self.after(3000, self.loading_bar_label.grid_remove) # Hide loading bar after short delay
+        self.after(3000, self.loading_bar.grid_remove) # Hide loading bar after short delay
 
 
     def color_composite(self):
@@ -821,48 +818,44 @@ class Visualizer(ctk.CTk):
         # Disable select local segmentation mode after selection
         overlay.select_local_segmentation = False
 
-        result = messagebox.askyesno("Local Segmentation Selection",
-                                    "Run unsupervised segmentation on the selected area?",
-                                    parent=self.master)
         self.canvas.delete(self.selection_rect_id)
         self.selection_rect_id = None
         self.selection_start_coord = None
 
-        if result:
-            # Show loading bar
-            self.loading_bar_label.grid(row=0, column=0)
-            self.loading_bar.grid(row=1, column=0)
-            self.update_idletasks()
+        # Show loading bar
+        self.loading_bar_label.grid(row=0, column=0)
+        self.loading_bar.grid(row=1, column=0)
+        self.update_idletasks()
 
-            self.loading_bar.set(0)
-            self.loading_bar_label.configure(text="Running local segmentation...")
-            self.update_idletasks()
+        self.loading_bar.set(0)
+        self.loading_bar_label.configure(text="Running local segmentation...")
+        self.update_idletasks()
 
-            # Run IRGS on the selected area
-            irgs_output, boundaries = IRGS(overlay.local_segmentation_area, n_classes=15, n_iter=120, mask=~land_nan_mask_crop)
+        # Run IRGS on the selected area
+        irgs_output, boundaries = IRGS(overlay.local_segmentation_area, n_classes=15, n_iter=120, mask=~land_nan_mask_crop)
 
-            self.loading_bar.set(0.7)
-            self.loading_bar_label.configure(text="Applying segmentation on overlay...")
-            self.update_idletasks()
+        self.loading_bar.set(0.7)
+        self.loading_bar_label.configure(text="Applying segmentation on overlay...")
+        self.update_idletasks()
 
-            overlay.local_segmentation_mask = np.zeros_like(scene.boundmasks[scene.active_source], dtype=np.uint8)
-            overlay.local_segmentation_mask[y_min:y_max, x_min:x_max] = irgs_output
-            overlay.local_segmentation_mask = np.tile(overlay.local_segmentation_mask[:, :, np.newaxis], (1, 1, 3))
+        overlay.local_segmentation_mask = np.zeros_like(scene.boundmasks[scene.active_source], dtype=np.uint8)
+        overlay.local_segmentation_mask[y_min:y_max, x_min:x_max] = irgs_output
+        overlay.local_segmentation_mask = np.tile(overlay.local_segmentation_mask[:, :, np.newaxis], (1, 1, 3))
 
-            overlay.local_segmentation_bounds = np.zeros_like(scene.boundmasks[scene.active_source], dtype=bool)
-            boundaries_bool = boundaries != 1
-            overlay.local_segmentation_bounds[y_min:y_max, x_min:x_max] = boundaries_bool
-            overlay.show_local_segmentation = True
+        overlay.local_segmentation_bounds = np.zeros_like(scene.boundmasks[scene.active_source], dtype=bool)
+        boundaries_bool = boundaries != 1
+        overlay.local_segmentation_bounds[y_min:y_max, x_min:x_max] = boundaries_bool
+        overlay.show_local_segmentation = True
 
-            self.refresh_view()
+        self.refresh_view()
 
-            self.loading_bar.set(1)
-            self.loading_bar_label.configure(text="Local segmentation applied")
-            self.update_idletasks()
-            sleep(2)
-            self.loading_bar_label.grid_remove()
-            self.loading_bar.grid_remove()
-            self.update_idletasks()
+        self.loading_bar.set(1)
+        self.loading_bar_label.configure(text="Local segmentation applied")
+        self.update_idletasks()
+
+        self.after(3000, self.loading_bar_label.grid_remove)
+        self.after(3000, self.loading_bar.grid_remove)
+        self.update_idletasks()
 
 
 
