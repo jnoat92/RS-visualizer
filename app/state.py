@@ -1,7 +1,7 @@
 '''
 Data classes for application state management
 
-Last modified: Jan 2026
+Last modified: Feb 2026
 '''
 
 import numpy as np

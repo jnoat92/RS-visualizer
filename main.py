@@ -1,8 +1,9 @@
 '''
+ArcticScope
 Remote Sensing Visualizer
 Main application entry point
 
-Last modified: Jan 2026
+Last modified: Feb 2026
 '''
 
 from app.visualizer import Visualizer

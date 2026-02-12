@@ -2,7 +2,7 @@
 Image input/output related functions
 Handles loading of images and predictions and path to external resources
 
-Last modified: Jan 2026
+Last modified: Feb 2026
 '''
 
 from PIL import Image
@@ -27,7 +27,7 @@ from scipy.interpolate import griddata
 from model.model_helper import Normalize_min_max, load_model, forward_model
 
 from core.utils import rgb2gray, generate_boundaries
-from core.parallel_stuff import Parallel
+from core.parallel_handler import Parallel
 from core.contrast_handler import precompute_valid_hist_u8
 
 def PredictionLoader(iterator, resize=False, img_shape=None):
@@ -163,14 +163,17 @@ def load_rcm_product(data_dir):
         If directory doesn't contain exactly one .img file or one product.xml file,
         or if .img file doesn't have exactly 2 bands.
     """
- 
     img_file = list(Path(data_dir).glob("*.img"))
-    xml_file = list(Path(data_dir).glob("product.xml"))
- 
     if len(img_file) != 1:
-        raise ValueError("expected one .img file")
+        img_file = list(Path(data_dir).glob("*.tif"))
+        if len(img_file) != 1:
+            raise ValueError("expected one .img or .tif file")
+
+    xml_file = list(Path(data_dir).glob("product.xml"))
+
     if len(xml_file) != 1:
         raise ValueError("expected one product.xml file")
+    
     img_path = img_file[0]
     xml_file = xml_file[0]
  
