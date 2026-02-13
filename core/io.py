@@ -20,7 +20,8 @@ from rasterio.features import rasterize
 from rasterio.crs import CRS
 from shapely.geometry import box, Polygon
 from shapely.ops import unary_union
-from rasterio.transform import xy, rowcol
+from rasterio.transform import array_bounds
+from rasterio.coords import BoundingBox
 from pyproj import Transformer
 import matplotlib.pyplot as plt
 import torch
@@ -272,7 +273,7 @@ def scale_hh_hv_to_200m(rcm_data, target_spacing_m=200):
     Loop over all RCM product folders in data_dir, rescale HH/HV to 200 m,
     and save the rescaled .img next to the original .img.
     """
-    dst_crs = CRS.from_epsg(3978)  # keep same CRS but ensure it's in EPSG format
+    dst_crs = CRS.from_epsg(3978)  # Canada Lambert Conformal Conic (meters) - good for preserving area and shape for Canada-wide data at this scale
 
     if rcm_data['img_type'] == ".img":
         # calculate target transform & shape
@@ -329,6 +330,8 @@ def scale_hh_hv_to_200m(rcm_data, target_spacing_m=200):
         print(dst_transform)
         print(dst_width, dst_height)
 
+        rcm_data["src_bounds"] = BoundingBox(*array_bounds(dst_height, dst_width, dst_transform))
+
         # allocate outputs
         hh_200m = np.empty((dst_height, dst_width), dtype=np.float32)
         hv_200m = np.empty((dst_height, dst_width), dtype=np.float32)
@@ -358,10 +361,12 @@ def scale_hh_hv_to_200m(rcm_data, target_spacing_m=200):
             src_nodata=rcm_data["nodata_hv"],
             dst_nodata=np.nan
         )
+        
+        rcm_data["src_crs"] = dst_crs
 
     # Create transformer for geocoding later
     transformer = Transformer.from_crs(rcm_data["src_crs"], "EPSG:4326", always_xy=True)
-    
+
     # # create output folder inside product_dir
     # out_dir = product_dir / "200m_pixel_spacing"
     # out_dir.mkdir(exist_ok=True)
@@ -397,14 +402,10 @@ def scale_hh_hv_to_200m(rcm_data, target_spacing_m=200):
     }
 
 def load_rcm_base_images(rcm_data):
-
-    print(rcm_data["hh"].shape, rcm_data["hv"].shape)
     
     rcm_200m_data = scale_hh_hv_to_200m(rcm_data, target_spacing_m=200)
     hh = rcm_200m_data["hh"]
     hv = rcm_200m_data["hv"]
-
-    print(hh.shape, hv.shape)
 
     # Helpful geocoding info for transforming pixel->lat/lon
     geo_coord_helpers = {"dst_transform": rcm_200m_data["src_transform"],
