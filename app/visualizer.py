@@ -24,6 +24,8 @@ from core.overlay import compose_overlay
 from core.render import crop_resize, layer_imagery
 from core.contrast_handler import enhance_outlier_slider
 from app.state import AppState
+from app.dependencies import AppDeps
+from ui.visualizer_layout import build_visualizer_layout
 
 
 class Visualizer(ctk.CTk):
@@ -54,327 +56,39 @@ class Visualizer(ctk.CTk):
         # Annotation state
         self.annotation_mode = None  # 'rectangle' or None
         self.selected_polygon = None   # Current canvas item being drawn
+        self.double_click_flag = False
         self.reset_annotation()
 
+        layout = build_visualizer_layout(self, self.app_state)
 
-        # ==================== LAYOUT: SIDEBAR (LEFT) + CANVAS (RIGHT)
-
-        # Main container holds sidebar and canvas
-        self.main_container = ctk.CTkFrame(self)
-        self.main_container.pack(fill="both", expand=True)
-
-        # Left sidebar for controls
-        self.sidebar = ctk.CTkFrame(self.main_container, width=200)
-        self.sidebar.pack(side="left", fill="y", padx=0, pady=0)
-        # self.sidebar.pack_propagate(False)  # Prevent sidebar from resizing to fit contents
-
-        # Canvas on the right
-        self.canvas = Canvas(self.main_container, bg="black")
-        self.canvas.pack(side="right", fill="both", expand=True)
-
-        # Canvas bindings
-        self.canvas.bind("<MouseWheel>", self._on_mousewheel)  # Windows
-        self.canvas.bind("<Button-4>", self._on_mousewheel)    # Linux scroll up
-        self.canvas.bind("<Button-5>", self._on_mousewheel)    # Linux scroll down
-
-        self.canvas.bind("<ButtonPress-1>", self._on_left_click_await)
-        self.canvas.bind("<B1-Motion>", self._on_left_drag)
-        self.canvas.bind("<ButtonRelease-1>", self._on_left_release)
-
-        self.canvas.bind("<Button-3>", self.on_right_click)
-        self.canvas.bind("<Double-Button-1>", self.on_double_click_set_flag)
-        self.canvas.bind("<Motion>", self.on_mouse_move)
-
-        self.bind("<Escape>", self.on_escape_key)
-
-        self.bind("<Control-z>", self.on_ctrl_z)
-        self.bind("<Control-y>", self.on_ctrl_y)
-        self.bind("<Control-Shift-Z>", self.on_ctrl_y)  # Some systems use Ctrl+Shift+Z for redo
-
-        self.double_click_flag = False
-
-
-        # ==================== CONTROL PANELS (STACKED VERTICALLY)
-
-        #%% Visualization panel (scene/channel/opacity/zoom)
-        self.control_frame = ctk.CTkFrame(self.sidebar)
-        self.control_frame.pack(fill="x", padx=5, pady=5)
-
-        # Image selection frame
-        self.select_image_frame = ctk.CTkFrame(self.control_frame)
-        self.select_image_frame.grid(row=0, column=0, padx=5, pady=(0, 5), sticky="nwe")
-
-        # Choose SAR scene
-        self.choose_SAR_scene_toggle_btn = ctk.CTkButton(
-            self.select_image_frame,
-            text="Choose SAR scene",
-            command=self.choose_SAR_scene
+        self.deps = AppDeps(
+            app=self,
+            app_state=self.app_state,
+            canvas=layout.canvas,
+            sidebar=layout.sidebar,
+            minimap=layout.minimap,
+            minimap_window_id=layout.minimap_window_id,
+            status_bar=layout.status_bar,
+            annotation_panel=layout.annotation_panel,
+            evaluation_panel=layout.evaluation_panel,
+            annotation_window=layout.annotation_window,
+            evaluation_window=layout.evaluation_window,
+            loading_bar=layout.loading_bar,
+            loading_bar_label=layout.loading_bar_label,
+            widgets=layout.widgets,
         )
-        self.choose_SAR_scene_toggle_btn.grid(row=0, column=0, columnspan=2,
-                                            sticky="w", padx=5, pady=5)
-        
-        # Color composite selection
-        self.mode_var_color_composite = ctk.StringVar(value=self.app_state.display.channel_mode)  # Default selection
-        HH_HV = ctk.CTkRadioButton(self.select_image_frame,
-                                      text="(HH/HV)", 
-                                      variable=self.mode_var_color_composite,
-                                      value="(HH/HV)", 
-                                      command=self.color_composite)
-        HH_HH_HV = ctk.CTkRadioButton(self.select_image_frame,
-                                      text="(HH, HH, HV)", 
-                                      variable=self.mode_var_color_composite,
-                                      value="(HH, HH, HV)", 
-                                      command=self.color_composite)
-        HH_HV_HV = ctk.CTkRadioButton(self.select_image_frame,
-                                      text="(HH, HV, HV)", 
-                                      variable=self.mode_var_color_composite,
-                                      value="(HH, HV, HV)", 
-                                      command=self.color_composite)
-        HH_HV.grid(   row=1, column=0, sticky="w", pady=(10, 10))
-        HH_HH_HV.grid(row=2, column=0, sticky="w", pady=(10, 10), columnspan=2)
-        HH_HV_HV.grid(row=3, column=0, sticky="w", pady=(10, 10), columnspan=2)
-
-        self.HH_HV_switch = ctk.CTkSwitch(
-            self.select_image_frame,
-            text="",
-            command=self.HH_HV
-        )
-        self.HH_HV_switch.grid(row=1, column=1, sticky="w", padx=5, pady=5)
-
-        # Contrast slider
-        self.contrast_slider_value = 0  # Initial value
-        ctk.CTkLabel(self.select_image_frame, text="Contrast").grid(
-            row=5, column=0, sticky="e", padx=5, pady=5
-        )
-        self.contrast_slider = ctk.CTkSlider(
-            self.select_image_frame,
-            from_=0,
-            to=200,
-            number_of_steps=200,
-            width=100,
-            command=self.contrast_slider_handle
-        )
-        self.contrast_slider.set(self.contrast_slider_value)  # Set initial value
-        self.contrast_slider.grid(row=5, column=1, pady=5, padx=5, sticky="w")
-        self.contrast_slider._canvas.bind("<Button-3>", self.right_click_contrast_reset)
-
-        # Brightness slider
-        self.brightness_slider_value = 0  # Initial value
-        ctk.CTkLabel(self.select_image_frame, text="Brightness").grid(
-            row=6, column=0, sticky="e", padx=5, pady=5
-        )
-        self.brightness_slider = ctk.CTkSlider(
-            self.select_image_frame,
-            from_=-100,
-            to=100,
-            number_of_steps=20,
-            width=100,
-            command=self.brightness_slider_handle
-        )
-        self.brightness_slider.set(self.brightness_slider_value)  # Set initial value
-        self.brightness_slider.grid(row=6, column=1, pady=5, padx=5, sticky="w")
-        self.brightness_slider._canvas.bind("<Button-3>", self.right_click_brightness_reset)
-
-        # Opacity + segmentation controls in same block
-        self.segmentation_frame = ctk.CTkFrame(self.control_frame)
-        self.segmentation_frame.grid(row=1, column=0, padx=5, pady=5, sticky="nwe")
-
-        self.opacity_slider_value = 50  # Initial value
-        ctk.CTkLabel(self.segmentation_frame, text="Opacity").grid(
-            row=0, column=0, sticky="e", padx=5, pady=5
-        )
-        self.opacity_slider = ctk.CTkSlider(
-            self.segmentation_frame,
-            from_=0,
-            to=100,
-            number_of_steps=20,
-            width=100,
-            command=self.opacity_slider_handle
-        )
-        self.opacity_slider.set(self.opacity_slider_value)  # Set initial value
-        self.opacity_slider.grid(row=0, column=1, pady=5, padx=5, sticky="w")
-
-        # Classes ON/OFF
-        ctk.CTkLabel(self.segmentation_frame, text="Ice/Water Labels").grid(
-            row=1, column=0, sticky="e", padx=5, pady=5
-        )
-        self.app_state.overlay.show_overlay = True
-        state = "ON" if self.app_state.overlay.show_overlay else "OFF"
-        self.segmentation_toggle_btn = ctk.CTkButton(
-            self.segmentation_frame,
-            text=state,
-            width=19,
-            command=self.segmentation_toggle
-        )
-        self.segmentation_toggle_btn.grid(row=1, column=1, sticky="w", padx=5, pady=5)
-        self.default_fg_color = self.segmentation_toggle_btn.cget("fg_color")
-        self.default_hover_color = self.segmentation_toggle_btn.cget("hover_color")
-        self.default_text_color = self.segmentation_toggle_btn.cget("text_color")
-
-        # Zoom controls
-        self.zoom_frame = ctk.CTkFrame(self.control_frame)
-        self.zoom_frame.grid(row=2, column=0, padx=5, pady=5, sticky="nwe")
-
-        self.zoom_select_btn = ctk.CTkButton(
-            self.zoom_frame,
-            text="Zoom to Selection Mode",
-            width=166,
-            command=self.enable_zoom_selection
-        )
-        self.zoom_select_btn.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-
-        self.zoom_btn_default_style = {     # store default style
-            "fg_color": self.zoom_select_btn.cget("fg_color"),
-            "hover_color": self.zoom_select_btn.cget("hover_color"),
-            "text_color": self.zoom_select_btn.cget("text_color"),
-            "font": self.zoom_select_btn.cget("font")
-        }
-        self.zoom_btn_active_style = {      # define active style
-            "fg_color": "#1F6AA5",
-            "hover_color": "#3B8ED0",
-            "text_color": "white",
-            "font": ctk.CTkFont(family="Segoe UI", size=13, weight="bold")
-        }
-
-        # Reset zoom button
-        reset_btn = ctk.CTkButton(
-            self.zoom_frame,
-            text="Reset Zoom",
-            command=self.reset_zoom
-        )
-        reset_btn.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
-
-        #%% Segmentation source (second block in sidebar)
-        self.lbl_source_frame = ctk.CTkFrame(self.sidebar)
-        self.lbl_source_frame.pack(fill="x", padx=5, pady=5)
-
-        ctk.CTkLabel(self.lbl_source_frame, text="Seg Source").grid(
-            row=0, column=0, sticky="nsew", pady=5
-        )
-
-        # Might want to move this out into another file for easy editing
-        self.app_state.scene.lbl_sources = [
-            "Unet+ITT_pixel",
-            # "Unet+ITT_pixel+MV",
-            # "Unet+ITT_region",
-            # "Results_Major"
-        ]
-        filenames_ = [
-            "colored_predict_cnn.png",
-            # "CNN_colored_m_v_per_CC.png",
-            # "colored_predict_transformer.png",
-            # "resnet.png"
-        ]
-        self.app_state.scene.filenames = ["/{}/{}".format(lbl_s, file)
-                        for lbl_s, file in zip(self.app_state.scene.lbl_sources, filenames_)]
-        self.lbl_source_btn = {}
-        self.mode_var_lbl_source = None
-        self.mode_var_lbl_source_prev = None
-
-        # Radio buttons for explicit selection
-        for i, lbl_s in enumerate(self.app_state.scene.lbl_sources):
-            self.update_label_source_widgets(lbl_s, i)
-
-        #%% Operations (third block in sidebar)
-        self.operation_frame = ctk.CTkFrame(self.sidebar)
-        self.operation_frame.pack(fill="x", padx=5, pady=5)
-
-        # # # Evaluation panel
-        self.evaluation_window = ctk.CTkToplevel(self)
-        self.evaluation_window.transient(self)  # Set parent window
-        self.evaluation_window.attributes("-topmost", True)  # Always on top
-        self.evaluation_window.title("Evaluation Panel")
-        self.evaluation_window.withdraw()  # Hide the window at start
-        self.evaluation_window.protocol(
-            "WM_DELETE_WINDOW",
-            self.close_evaluation_panel
-        )  # Hide window instead of destroying it on close
-
-        self.evaluation_panel = EvaluationPanel(self.evaluation_window, self)
-        self.evaluation_panel.pack(fill="both", expand=True, padx=10, pady=10)
-
-        ctk.CTkButton(
-            self.operation_frame,
-            text="Evaluation",
-            command=self.show_evaluation_panel
-        ).grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-
-        # # # Annotation panel
-        self.annotation_window = ctk.CTkToplevel(self)
-        self.annotation_window.transient(self)  # Set parent window
-        self.annotation_window.attributes("-topmost", True)  # Always on top
-        self.annotation_window.title("Annotation Panel")
-        self.annotation_window.withdraw()  # Hide the window at start
-        self.annotation_window.protocol(
-            "WM_DELETE_WINDOW",
-            self.close_annotation_panel
-        )  # Hide window instead of destroying it on close
-
-        self.annotation_panel = AnnotationPanel(self.annotation_window, self)
-        self.annotation_panel.pack(fill="both", expand=True, padx=10, pady=10)
-
-        ctk.CTkButton(
-            self.operation_frame,
-            text="Annotation",
-            command=self.show_annotation_panel
-        ).grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
-
-        # Loading bar at the bottom of the sidebar
-        self.loading_bar_frame = ctk.CTkFrame(self.sidebar)
-        self.loading_bar_frame.pack(fill="x", padx=5, pady=5, side="bottom")
- 
-        # Loading bar label
-        self.loading_bar_label = ctk.CTkLabel(self.loading_bar_frame, text="", font=ctk.CTkFont(size=12))
-        self.loading_bar = ctk.CTkProgressBar(self.loading_bar_frame, orientation="horizontal", mode="determinate")
-        self.loading_bar.set(0)
-
-        # Set up in grid for hiding and showing
-        self.loading_bar_label.grid(row=0, column=0, padx=5, pady=5, sticky="we")
-        self.loading_bar.grid(row=1, column=0, padx=5, pady=5, sticky="we")
-
-        self.loading_bar_label.grid_remove() # Hide loading bar after short delay
-        self.loading_bar.grid_remove() # Hide loading bar after short delay
-
-        # Minimap frame housing minimap and status bar
-        self.minimap_frame = ctk.CTkFrame(self.canvas, width=200, height=200, corner_radius=12)
-        
-        # Coords on top of minimap
-        self.status_bar = ctk.CTkLabel(self.minimap_frame, width=200,text="-, -", bg_color="black", text_color="white", font=ctk.CTkFont(size=12))
-        self.status_bar.pack(fill="both", expand=True, anchor = "center")
-
-        # Minimap in bottom-right corner of canvas
-        self.minimap = Minimap(self.minimap_frame, w=200, h=200)
-        self.minimap.pack(fill="both", expand=True)
-        self.minimap_window_id = self.canvas.create_window(0, 0, window=self.minimap_frame, anchor="se", tags=("minimap"))
-        self.canvas.bind("<Configure>", self._update_minimap_position)
-        
-        # Add toggle for showing previous annotations on minimap right below annotation button
-        self.show_prev_anno_switch = ctk.CTkSwitch(
-            self.operation_frame,
-            text="Show Annotations on Minimap",
-            command=self.toggle_show_anno_on_minimap
-        )
-        self.show_prev_anno_switch.select()  # Default to showing previous annotations
-        self.show_prev_anno_switch.grid(row=2, column=0, padx=5, pady=5, sticky="w")
-
-        # Layout behavior inside bottom_container
-        self.sidebar.grid_rowconfigure(0, weight=0)
-        self.sidebar.grid_rowconfigure(1, weight=0)
-        self.sidebar.grid_rowconfigure(2, weight=1)
-        self.sidebar.grid_rowconfigure(3, weight=1)
-        self.sidebar.grid_columnconfigure(0, weight=1)
 
         #%% INITIAL VISUALIZATION / STATE
 
-        display.channel_mode = self.mode_var_color_composite.get()
+        display.channel_mode = self.deps.widgets['mode_var_color_composite'].get()
         if display.channel_mode == "(HH/HV)":
-            display.channel_mode = "HV" if self.HH_HV_switch.get() else "HH"
+            display.channel_mode = "HV" if self.deps.widgets['hh_hv_switch'].get() else "HH"
 
         # Disable everything until SAR scene is chosen
         self._set_all_children_enabled(
-            self.sidebar,
+            self.deps.sidebar,
             False,
-            exclude=[self.choose_SAR_scene_toggle_btn]
+            exclude=[self.deps.widgets['choose_SAR_scene_toggle_btn']]
         )
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -386,9 +100,9 @@ class Visualizer(ctk.CTk):
         Keep the minimap in the bottom-right corner of the canvas when resizing.
         """
         pad = 12
-        w = self.canvas.winfo_width()
-        h = self.canvas.winfo_height()
-        self.canvas.coords(self.minimap_window_id, w - pad, h - pad)
+        w = self.deps.canvas.winfo_width()
+        h = self.deps.canvas.winfo_height()
+        self.deps.canvas.coords(self.deps.minimap_window_id, w - pad, h - pad)
 
 
     # Load images
@@ -398,15 +112,15 @@ class Visualizer(ctk.CTk):
         Update the label source selection widgets (button) when new label sources are loaded.
         """
         # Radio buttons for explicit selection
-        if self.mode_var_lbl_source is None:
-            self.mode_var_lbl_source = ctk.StringVar(value=lbl_source)  # Default selection
-            self.mode_var_lbl_source_prev = self.mode_var_lbl_source.get()
-        self.lbl_source_btn[lbl_source] = ctk.CTkRadioButton(self.lbl_source_frame, 
-                                                                text=lbl_source, 
-                                                                variable=self.mode_var_lbl_source,
+        if self.deps.widgets['mode_var_lbl_source'] is None:
+            self.deps.widgets['mode_var_lbl_source'] = ctk.StringVar(value=lbl_source)  # Default selection
+            self.deps.widgets['mode_var_lbl_source_prev'] = self.deps.widgets['mode_var_lbl_source'].get()
+        self.deps.widgets['lbl_source_btn'][lbl_source] = ctk.CTkRadioButton(self.deps.widgets['lbl_source_frame'], 
+                                                                                text=lbl_source, 
+                                                                                variable=self.deps.widgets['mode_var_lbl_source'],
                                                                 value=lbl_source, 
                                                                 command=self.choose_lbl_source)
-        self.lbl_source_btn[lbl_source].grid(row=i+1, column=0, sticky="w", pady=(10, 10))
+        self.deps.widgets['lbl_source_btn'][lbl_source].grid(row=i+1, column=0, sticky="w", pady=(10, 10))
 
     def load_pred(self):
         """
@@ -442,14 +156,14 @@ class Visualizer(ctk.CTk):
             variables.append(existing_anno)
             scene.lbl_sources.append("Custom_Annotation")
             scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], scene.scene_name, "custom_annotation.png"))
-        self.annotation_panel.clear_notes()
+        self.deps.annotation_panel.clear_notes()
         
         # Reset label source radio buttons
-        for key in self.lbl_source_btn.keys():
-            self.lbl_source_btn[key].destroy()
-        self.lbl_source_btn = {}
-        self.mode_var_lbl_source = None
-        self.mode_var_lbl_source_prev = None
+        for key in self.deps.widgets['lbl_source_btn'].keys():
+            self.deps.widgets['lbl_source_btn'][key].destroy()
+        self.deps.widgets['lbl_source_btn'] = {}
+        self.deps.widgets['mode_var_lbl_source'] = None
+        self.deps.widgets['mode_var_lbl_source_prev'] = None
 
         # Add available label sources
         for i, (key, pred, land_nan_mask, boundmask) in enumerate(variables):
@@ -469,7 +183,7 @@ class Visualizer(ctk.CTk):
                                          parent=self.master)
             if result:
                 scene.active_source = custom_anno
-                self.mode_var_lbl_source.set(custom_anno)
+                self.deps.widgets['mode_var_lbl_source'].set(custom_anno)
 
             self.choose_image() # Refresh image to show annotation on minimap
 
@@ -493,11 +207,11 @@ class Visualizer(ctk.CTk):
         custom_anno = "Custom_Annotation"
 
         # Check if custom annotation exists and if user wants to show it on minimap
-        if custom_anno in scene.lbl_sources and self.show_prev_anno_switch.get():
+        if custom_anno in scene.lbl_sources and self.deps.widgets['show_prev_anno_switch'].get():
             changed_area_mask = scene.predictions[custom_anno][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
         else:
-            self.minimap.set_image(scene.img)
+            self.deps.minimap.set_image(scene.img)
 
     def display_image(self):
         """
@@ -507,8 +221,8 @@ class Visualizer(ctk.CTk):
 
         self.tk_image = ImageTk.PhotoImage(Image.fromarray(image))
 
-        self.canvas.delete("main_image")  # Remove previous image
-        self.canvas.create_image(self.draw_x, self.draw_y, anchor=tk.NW, image=self.tk_image, tags=("main_image"))
+        self.deps.canvas.delete("main_image")  # Remove previous image
+        self.deps.canvas.create_image(self.draw_x, self.draw_y, anchor=tk.NW, image=self.tk_image, tags=("main_image"))
 
     
     def refresh_view(self):
@@ -524,12 +238,24 @@ class Visualizer(ctk.CTk):
         self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, self.local_boundmask_resized, self.draw_x, self.draw_y = crop_resize(
                     scene.predictions[scene.active_source], scene.img, scene.boundmasks[scene.active_source], scene.land_nan_masks[scene.active_source], 
                     overlay.local_segmentation_bounds, scene.nan_mask["HH"], view.zoom_factor, view.offset_x, view.offset_y, display.brightness,
-                    self.canvas.winfo_width(), self.canvas.winfo_height(), overlay.show_local_segmentation)
+                    self.deps.canvas.winfo_width(), self.deps.canvas.winfo_height(), overlay.show_local_segmentation)
         self.set_overlay()
         self.display_image()
 
         # Update minimap viewport
-        self.minimap.set_viewport_rect(scene.img, view.zoom_factor, view.offset_x, view.offset_y, self.canvas.winfo_width(), self.canvas.winfo_height())
+        self.deps.minimap.set_viewport_rect(scene.img, view.zoom_factor, view.offset_x, view.offset_y, self.deps.canvas.winfo_width(), self.deps.canvas.winfo_height())
+
+    def refresh_all(self):
+        self.refresh_view()
+
+        if self.app_state.anno.polygon_points_img_coor: 
+            self.draw_polygon_on_canvas()
+
+        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
+            self.deps.annotation_panel.zoom_window is not None and 
+            self.deps.annotation_panel.zoom_window.winfo_exists()):
+            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
+                self.deps.annotation_panel.update_zoomed_display()
 
 
     # Image selection handle
@@ -564,12 +290,12 @@ class Visualizer(ctk.CTk):
             self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
 
             # Show loading bar
-            self.loading_bar_label.grid(row=0, column=0)
-            self.loading_bar.grid(row=1, column=0)
+            self.deps.loading_bar_label.grid(row=0, column=0)
+            self.deps.loading_bar.grid(row=1, column=0)
             self.update_idletasks()
 
-            self.loading_bar.set(0) # Update loading bar after loading images
-            self.loading_bar_label.configure(text="Loading images...")
+            self.deps.loading_bar.set(0) # Update loading bar after loading images
+            self.deps.loading_bar_label.configure(text="Loading images...")
             self.update_idletasks() # Force UI update to show loading bar progress
 
             try:
@@ -577,28 +303,28 @@ class Visualizer(ctk.CTk):
             except (FileNotFoundError, ValueError) as e:
                 messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{e}", parent=self.master)
                 scene.folder_path = ''
-                self.loading_bar.set(0) # Update loading bar after loading images
-                self.loading_bar_label.configure(text="Error loading images")
+                self.deps.loading_bar.set(0) # Update loading bar after loading images
+                self.deps.loading_bar_label.configure(text="Error loading images")
                 self.update_idletasks()
                 return
 
-            self.loading_bar.set(0.2) # Update loading bar after loading images
-            self.loading_bar_label.configure(text="Scaling images...")
+            self.deps.loading_bar.set(0.2) # Update loading bar after loading images
+            self.deps.loading_bar_label.configure(text="Scaling images...")
             self.update_idletasks()      
 
             # Scale image
             rcm_200m_data, rcm_scaled_data = scale_hh_hv(rcm_data, target_spacing=scene.target_spacing)
 
-            self.loading_bar.set(0.35) # Update loading bar after loading images
-            self.loading_bar_label.configure(text="Building land mask...")
+            self.deps.loading_bar.set(0.35) # Update loading bar after loading images
+            self.deps.loading_bar_label.configure(text="Building land mask...")
             self.update_idletasks()
 
             # Build land masks
             land_mask = build_land_masks(rcm_scaled_data)
 
 
-            self.loading_bar.set(0.5) # Update loading bar after loading images
-            self.loading_bar_label.configure(text="Normalizing data...")
+            self.deps.loading_bar.set(0.5) # Update loading bar after loading images
+            self.deps.loading_bar_label.configure(text="Normalizing data...")
             self.update_idletasks()  
 
             # Normalize and prepare images
@@ -646,8 +372,8 @@ class Visualizer(ctk.CTk):
 
             self.choose_image()
 
-            self.loading_bar.set(0.6)
-            self.loading_bar_label.configure(text="Generating prediction...")
+            self.deps.loading_bar.set(0.6)
+            self.deps.loading_bar_label.configure(text="Generating prediction...")
             self.update_idletasks()
 
             self.load_pred()
@@ -658,25 +384,25 @@ class Visualizer(ctk.CTk):
             self.update_idletasks()
             self.after(100, self.reset_zoom)    # Delay the initial reset call with .after() so the canvas has its final size:
             
-            self._set_all_children_enabled(self.sidebar, True)
+            self._set_all_children_enabled(self.deps.sidebar, True)
             if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
-                self.HH_HV_switch.configure(state=ctk.DISABLED)
+                self.deps.widgets["hh_hv_switch"].configure(state=ctk.DISABLED)
 
             # Reset annotation stacks
             anno.undo_stack.clear()
             anno.redo_stack.clear()
 
-            self.contrast_slider.set(0) # reset to default
+            self.deps.widgets["contrast_slider"].set(0) # reset to default
             self.app_state.display.contrast = 0.0
-            self.brightness_slider.set(0) # reset to default
+            self.deps.widgets["brightness_slider"].set(0) # reset to default
             self.app_state.display.brightness = 0.0
 
-            self.loading_bar.set(1)
-            self.loading_bar_label.configure(text="Inference complete")
+            self.deps.loading_bar.set(1)
+            self.deps.loading_bar_label.configure(text="Inference complete")
             self.update_idletasks()
 
-            self.after(3000, self.loading_bar_label.grid_remove) # Hide loading bar after short delay
-            self.after(3000, self.loading_bar.grid_remove) # Hide loading bar after short delay
+            self.after(3000, self.deps.loading_bar_label.grid_remove) # Hide loading bar after short delay
+            self.after(3000, self.deps.loading_bar.grid_remove) # Hide loading bar after short delay
 
         else:
             scene.folder_path = prev_folder_path
@@ -686,13 +412,13 @@ class Visualizer(ctk.CTk):
         Handle color composite selection changes, enable/disable HH/HV switch accordingly, and update the displayed image.
         """
         display = self.app_state.display
-        display.channel_mode = self.mode_var_color_composite.get()
+        display.channel_mode = self.deps.widgets["mode_var_color_composite"].get()
 
         if display.channel_mode == "(HH/HV)":
-            self.HH_HV_switch.configure(state=ctk.NORMAL)
+            self.deps.widgets["hh_hv_switch"].configure(state=ctk.NORMAL)
             self.HH_HV(get_channel=True)
         else:
-            self.HH_HV_switch.configure(state=ctk.DISABLED)
+            self.deps.widgets["hh_hv_switch"].configure(state=ctk.DISABLED)
             self.HH_HV(get_channel=False)
 
         
@@ -704,24 +430,15 @@ class Visualizer(ctk.CTk):
         scene = self.app_state.scene
 
         if get_channel:
-            display.channel_mode = "HV" if self.HH_HV_switch.get() else "HH"
+            display.channel_mode = "HV" if self.deps.widgets["hh_hv_switch"].get() else "HH"
 
-        self.contrast_slider.set(0)  # Reset contrast slider
+        self.deps.widgets["contrast_slider"].set(0)  # Reset contrast slider
         self.contrast_slider_handle(0)
 
         self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
         self.choose_image()
 
-        self.refresh_view()
-
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
-
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.update_zoomed_display()
+        self.refresh_all()
 
     # Image handle
     def contrast_slider_handle(self, val):
@@ -762,67 +479,31 @@ class Visualizer(ctk.CTk):
                 s=display.contrast
             )
 
-        self.refresh_view()
-
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
-
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.update_zoomed_display()
+        self.refresh_all()
 
     def right_click_contrast_reset(self, event):
         """
         Handle right-click on contrast slider to reset contrast to default, refresh the display.
         """
-        self.contrast_slider.set(0) # reset to default
+        self.deps.widgets["contrast_slider"].set(0) # reset to default
         self.app_state.display.contrast = 0.0
         self.contrast_slider_handle(0)
-        self.refresh_view()
-
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
-
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.update_zoomed_display()
+        self.refresh_all()
 
     def brightness_slider_handle(self,val):
         """
         Handle brightness slider changes, update the displayed image based on the selected channel, and refresh the display.
         """
         self.app_state.display.brightness = float(val)/100
-        self.refresh_view()
-
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
-
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.update_zoomed_display()
+        self.refresh_all()
 
     def right_click_brightness_reset(self, event):
         """
         Handle right-click on brightness slider to reset brightness to default, refresh the display.
         """
-        self.brightness_slider.set(0) # reset to default
+        self.deps.widgets["brightness_slider"].set(0) # reset to default
         self.app_state.display.brightness = 0.0
-        self.refresh_view()
-
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
-
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.update_zoomed_display()
+        self.refresh_all()
 
     # Segmentation handle
 
@@ -837,11 +518,11 @@ class Visualizer(ctk.CTk):
         if self.app_state.anno.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
 
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.update_zoomed_display()
+        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
+            self.deps.annotation_panel.zoom_window is not None and 
+            self.deps.annotation_panel.zoom_window.winfo_exists()):
+            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
+                self.deps.annotation_panel.update_zoomed_display()
 
     def segmentation_toggle(self):
         """
@@ -851,20 +532,20 @@ class Visualizer(ctk.CTk):
         overlay_state = self.app_state.overlay
         overlay_state.show_overlay = not overlay_state.show_overlay
         state = "ON" if overlay_state.show_overlay else "OFF"
-        self.segmentation_toggle_btn.configure(text=state)
+        self.deps.widgets["segmentation_toggle_btn"].configure(text=state)
 
         self.display_image()
 
         if overlay_state.show_overlay:
             # Restore default appearance
-            self.segmentation_toggle_btn.configure(
-                fg_color=self.default_fg_color,  # Default customtkinter blue
-                hover_color=self.default_hover_color,
-                text_color=self.default_text_color
+            self.deps.widgets["segmentation_toggle_btn"].configure(
+                fg_color=self.deps.widgets["default_fg_color"],  # Default customtkinter blue
+                hover_color=self.deps.widgets["default_hover_color"],
+                text_color=self.deps.widgets["default_text_color"]
             )
         else:
             # Set to gray when OFF
-            self.segmentation_toggle_btn.configure(
+            self.deps.widgets["segmentation_toggle_btn"].configure(
                 fg_color="#888888",     # Gray background
                 hover_color="#777777",  # Slightly darker on hover
                 text_color="white"
@@ -873,11 +554,11 @@ class Visualizer(ctk.CTk):
         if self.app_state.anno.polygon_points_img_coor: 
             self.draw_polygon_on_canvas()
 
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.update_zoomed_display()
+        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
+            self.deps.annotation_panel.zoom_window is not None and 
+            self.deps.annotation_panel.zoom_window.winfo_exists()):
+            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
+                self.deps.annotation_panel.update_zoomed_display()
 
 
     # Zoom handle
@@ -890,8 +571,8 @@ class Visualizer(ctk.CTk):
         overlay = self.app_state.overlay
         if not overlay.select_local_segmentation: # If not in local segmentation mode perform zoom selection
             view.zoom_select_mode = True
-            self.zoom_select_btn.configure(**self.zoom_btn_active_style)
-        self.canvas.config(cursor="crosshair")
+            self.deps.widgets["zoom_select_btn"].configure(**self.deps.widgets["zoom_btn_active_style"])
+        self.deps.canvas.config(cursor="crosshair")
 
     def zoom_to_rectangle(self, x_min, y_min, x_max, y_max):
         """
@@ -903,8 +584,8 @@ class Visualizer(ctk.CTk):
         rect_width = x_max - x_min
         rect_height = y_max - y_min
 
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
+        canvas_width = self.deps.canvas.winfo_width()
+        canvas_height = self.deps.canvas.winfo_height()
 
         zoom_x = canvas_width / rect_width
         zoom_y = canvas_height / rect_height
@@ -936,30 +617,30 @@ class Visualizer(ctk.CTk):
         # Disable select local segmentation mode after selection
         overlay.select_local_segmentation = False
 
-        self.canvas.delete(self.selection_rect_id)
+        self.deps.canvas.delete(self.selection_rect_id)
         self.selection_rect_id = None
         self.selection_start_coord = None
 
         # Show loading bar
-        self.loading_bar_label.grid(row=0, column=0)
-        self.loading_bar.grid(row=1, column=0)
+        self.deps.loading_bar_label.grid(row=0, column=0)
+        self.deps.loading_bar.grid(row=1, column=0)
         self.update_idletasks()
 
-        self.loading_bar.set(0)
-        self.loading_bar_label.configure(text="Running local segmentation...")
+        self.deps.loading_bar.set(0)
+        self.deps.loading_bar_label.configure(text="Running local segmentation...")
         self.update_idletasks()
 
         # Run IRGS on the selected area
         irgs_output, boundaries = IRGS(overlay.local_segmentation_area, n_classes=overlay.local_seg_n_classes, n_iter=120, mask=~land_nan_mask_crop)
 
-        self.loading_bar.set(0.4)
-        self.loading_bar_label.configure(text="Clearing border polygons...")
+        self.deps.loading_bar.set(0.4)
+        self.deps.loading_bar_label.configure(text="Clearing border polygons...")
         self.update_idletasks()
 
         irgs_output, boundaries = remove_edge_touching_polygons(irgs_output)
 
-        self.loading_bar.set(0.7)
-        self.loading_bar_label.configure(text="Applying segmentation on overlay...")
+        self.deps.loading_bar.set(0.7)
+        self.deps.loading_bar_label.configure(text="Applying segmentation on overlay...")
         self.update_idletasks()
 
         overlay.local_segmentation_mask = np.zeros_like(scene.boundmasks[scene.active_source], dtype=np.uint8)
@@ -974,12 +655,12 @@ class Visualizer(ctk.CTk):
         self.reset_annotation() # Reset annotation to prevent annotation on old local segmentation
         self.refresh_view()
 
-        self.loading_bar.set(1)
-        self.loading_bar_label.configure(text="Local segmentation applied")
+        self.deps.loading_bar.set(1)
+        self.deps.loading_bar_label.configure(text="Local segmentation applied")
         self.update_idletasks()
 
-        self.after(3000, self.loading_bar_label.grid_remove)
-        self.after(3000, self.loading_bar.grid_remove)
+        self.after(3000, self.deps.loading_bar_label.grid_remove)
+        self.after(3000, self.deps.loading_bar.grid_remove)
         self.update_idletasks()
 
 
@@ -993,8 +674,8 @@ class Visualizer(ctk.CTk):
         view = self.app_state.view
         scene = self.app_state.scene
         # Get canvas dimensions
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
+        canvas_width = self.deps.canvas.winfo_width()
+        canvas_height = self.deps.canvas.winfo_height()
 
         # Use overlay or base image to get image size
         img_height, img_width = scene.img.shape[:2]
@@ -1028,12 +709,12 @@ class Visualizer(ctk.CTk):
         if scene.img is None:
             return 0 # No image loaded, ignore label source change
 
-        scene.active_source = self.mode_var_lbl_source.get()
+        scene.active_source = self.deps.widgets["mode_var_lbl_source"].get()
         key = scene.active_source
 
         if scene.predictions[key] is None:
             messagebox.showinfo("Error", f"The selected directory does not contain prediction files for {key}.", parent=self.master)
-            self.mode_var_lbl_source.set(self.mode_var_lbl_source_prev)
+            self.deps.widgets["mode_var_lbl_source"].set(self.mode_var_lbl_source_prev)
             return 0
         self.mode_var_lbl_source_prev = key
 
@@ -1042,8 +723,8 @@ class Visualizer(ctk.CTk):
 
         self.reset_annotation()
 
-        if self.evaluation_window.winfo_viewable():
-            self.evaluation_panel.load_existing_evaluation()
+        if self.deps.evaluation_window.winfo_viewable():
+            self.deps.evaluation_panel.load_existing_evaluation()
 
         return 1
 
@@ -1061,8 +742,8 @@ class Visualizer(ctk.CTk):
             return  # no change
 
         # Mouse position in canvas
-        canvas_x = self.canvas.canvasx(event.x)
-        canvas_y = self.canvas.canvasy(event.y)
+        canvas_x = self.deps.canvas.canvasx(event.x)
+        canvas_y = self.deps.canvas.canvasy(event.y)
 
         # Convert to image coordinates before zoom
         img_x = (canvas_x - view.offset_x) / old_zoom
@@ -1093,7 +774,7 @@ class Visualizer(ctk.CTk):
     def choose_click_event(self, event):
         """Determine whether the click was a single or double click and call the appropriate handler."""
         if self.double_click_flag:
-            self.on_double_click(event)
+            self._on_double_click(event)
             self.double_click_flag = False
         else:
             self._on_left_click(event)
@@ -1106,14 +787,14 @@ class Visualizer(ctk.CTk):
         if view.zoom_select_mode:
             # Start selection
             self.selection_start_coord = (event.x, event.y)
-            self.selection_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='red', width=2)
+            self.selection_rect_id = self.deps.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='red', width=2)
         elif overlay.select_local_segmentation:
             # Start selection for local segmentation
             self.selection_start_coord = (event.x, event.y)
-            self.selection_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='blue', width=2)
+            self.selection_rect_id = self.deps.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='blue', width=2)
         elif anno.annotation_mode == 'rectangle':
                 self.selection_start_coord = (event.x, event.y)
-                self.selected_polygon = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='yellow', width=2)
+                self.selected_polygon = self.deps.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='yellow', width=2)
         elif anno.annotation_mode == 'polygon':
                 self._add_polygon_point(event)
         elif anno.annotation_mode == 'bucket_fill':
@@ -1121,7 +802,7 @@ class Visualizer(ctk.CTk):
             y = round(np.float64((event.y - view.offset_y) / view.zoom_factor))
             if anno.selected_polygon_area_idx is None or \
                 (y,x) not in zip(anno.selected_polygon_area_idx[0], anno.selected_polygon_area_idx[1]):
-                self.on_double_click(event) # Use double-click handler for bucket fill
+                self._on_double_click(event) # Use double-click handler for bucket fill
             else:
                 self.bucket_fill_polygon_area(event)
         else:
@@ -1143,16 +824,16 @@ class Visualizer(ctk.CTk):
             # Update selection rectangle
             x0, y0 = self.selection_start_coord
             x1, y1 = event.x, event.y
-            self.canvas.coords(self.selection_rect_id, x0, y0, x1, y1)
+            self.deps.canvas.coords(self.selection_rect_id, x0, y0, x1, y1)
         elif overlay.select_local_segmentation and self.selection_start_coord:
             # Update selection rectangle for local segmentation
             x0, y0 = self.selection_start_coord
             x1, y1 = event.x, event.y
-            self.canvas.coords(self.selection_rect_id, x0, y0, x1, y1)
+            self.deps.canvas.coords(self.selection_rect_id, x0, y0, x1, y1)
         elif anno.annotation_mode == 'rectangle' and self.selection_start_coord:
             x0, y0 = self.selection_start_coord
             x1, y1 = event.x, event.y
-            self.canvas.coords(self.selected_polygon, x0, y0, x1, y1)
+            self.deps.canvas.coords(self.selected_polygon, x0, y0, x1, y1)
         elif view.pan_start_screen:
             # Pan mode
             dx = event.x - view.pan_start_screen[0]
@@ -1173,11 +854,11 @@ class Visualizer(ctk.CTk):
         overlay = self.app_state.overlay
         anno = self.app_state.anno
         if anno.annotation_mode == 'bucket_fill':
-            self.canvas.config(cursor="spraycan")
+            self.deps.canvas.config(cursor="spraycan")
         elif anno.annotation_mode == 'polygon':
-            self.canvas.config(cursor="crosshair")
+            self.deps.canvas.config(cursor="crosshair")
         else:
-            self.canvas.config(cursor="")
+            self.deps.canvas.config(cursor="")
 
         if view.zoom_select_mode and self.selection_start_coord:
             # Complete selection and zoom
@@ -1185,11 +866,11 @@ class Visualizer(ctk.CTk):
             x1, y1 = event.x, event.y
 
             # Reset variables
-            self.canvas.delete(self.selection_rect_id)
+            self.deps.canvas.delete(self.selection_rect_id)
             self.selection_rect_id = None
             self.selection_start_coord = None
             view.zoom_select_mode = False
-            self.zoom_select_btn.configure(**self.zoom_btn_default_style)
+            self.deps.widgets["zoom_select_btn"].configure(**self.deps.widgets["zoom_btn_default_style"])
 
             # Convert canvas to image coords
             x_min = min(x0, x1)
@@ -1262,16 +943,16 @@ class Visualizer(ctk.CTk):
         elif view.pan_start_screen:
             view.pan_start_screen = None  # end pan
 
-    def on_right_click(self, event):
+    def _on_right_click(self, event):
         """Handle right-click to finish polygon drawing."""
         if self.app_state.anno.annotation_mode == 'polygon':
             self._finish_polygon()
 
-    def on_double_click_set_flag(self, event):
+    def _on_double_click_set_flag(self, event):
         """Set flag on double click to differentiate between single and double clicks."""
         self.double_click_flag = True
 
-    def on_double_click(self, event):
+    def _on_double_click(self, event):
         """
         Handle double-click to select polygon area, check if selection is within bounds 
         and local segmentation area, draw polygon on canvas, or bucket fill if in bucket fill mode.
@@ -1280,13 +961,13 @@ class Visualizer(ctk.CTk):
         scene = self.app_state.scene
         anno = self.app_state.anno
         overlay = self.app_state.overlay
-        if self.annotation_window.winfo_viewable():
+        if self.deps.annotation_window.winfo_viewable():
 
-            if (hasattr(self.annotation_panel, 'zoom_window') and 
-                self.annotation_panel.zoom_window is not None and 
-                self.annotation_panel.zoom_window.winfo_exists()):
-                if self.annotation_panel.zoom_window.winfo_viewable():            
-                    self.annotation_panel.zoom_window.destroy()
+            if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
+                self.deps.annotation_panel.zoom_window is not None and 
+                self.deps.annotation_panel.zoom_window.winfo_exists()):
+                if self.deps.annotation_panel.zoom_window.winfo_viewable():            
+                    self.deps.annotation_panel.zoom_window.destroy()
 
             self.reset_annotation()
 
@@ -1357,7 +1038,7 @@ class Visualizer(ctk.CTk):
                 self.bucket_fill_polygon_area(event)
                 self.double_click_flag = False
 
-    def on_mouse_move(self, event):
+    def _on_mouse_move(self, event):
         """
         Handle mouse move events to display lat/lon coordinates in the status bar 
         based on the current mouse position, check if the coordinates are valid, 
@@ -1372,9 +1053,9 @@ class Visualizer(ctk.CTk):
         if scene.img is not None:
             h, w = scene.predictions[scene.active_source].shape[:2]
             if not (0 <= x < w and 0 <= y < h):
-                self.status_bar.configure(text=f"Lat: N/A, Lon: N/A")
+                self.deps.status_bar.configure(text=f"Lat: N/A, Lon: N/A")
             elif scene.nan_mask["HH"][y, x]:
-                self.status_bar.configure(text=f"Lat: N/A, Lon: N/A")
+                self.deps.status_bar.configure(text=f"Lat: N/A, Lon: N/A")
             else:
                 # To handle cases where transformer is not available, use tie points to interpolate lat/lon
                 if scene.geo_coord_helpers["transformer"] is None:
@@ -1391,42 +1072,42 @@ class Visualizer(ctk.CTk):
                 # Convert lat and lon to DMS format
                 lat_dms = self.decimal_to_dms(lat, is_latitude=True)
                 lon_dms = self.decimal_to_dms(lon, is_latitude=False)
-                self.status_bar.configure(text=f"Lat: {lat:.4f}, Lon: {lon:.4f}\n{lat_dms} {lon_dms}")
+                self.deps.status_bar.configure(text=f"Lat: {lat:.4f}, Lon: {lon:.4f}\n{lat_dms} {lon_dms}")
 
-    def on_escape_key(self, event):
+    def _on_escape_key(self, event):
         """Handle Escape key press to exit bucket fill mode or deselect polygons when in annotation mode."""
         anno = self.app_state.anno
-        if self.annotation_window.winfo_viewable():
+        if self.deps.annotation_window.winfo_viewable():
             if anno.annotation_mode == 'bucket_fill':
                 self.exit_bucket_fill(event)
             else:
                 self.reset_annotation()
                 anno.active_label = None
                 anno.annotation_mode = None
-                self.canvas.config(cursor="")
+                self.deps.canvas.config(cursor="")
 
-    def on_ctrl_z(self, event=None):
+    def _on_ctrl_z(self, event=None):
         """
         Handle Ctrl+Z key press to undo the last annotation action, 
         pop from the undo stack, push to the redo stack, and update the display accordingly.
         """
         anno = self.app_state.anno
         scene = self.app_state.scene
-        if self.annotation_window.winfo_viewable() and anno.undo_stack:
+        if self.deps.annotation_window.winfo_viewable() and anno.undo_stack:
             # Pop from undo stack and push to redo stack with current state
             last_polygon, last_colours, last_window = anno.undo_stack.pop()
             anno.redo_stack.append((last_polygon, scene.predictions[scene.active_source][last_polygon].copy(), last_window))
             self.undo_redo_annotation(last_polygon, last_colours, last_window)
 
 
-    def on_ctrl_y(self, event=None):
+    def _on_ctrl_y(self, event=None):
         """
         Handle Ctrl+Y (also Ctrl+Shift+Z) key press to redo the last undone annotation action, 
         pop from the redo stack, push to the undo stack, and update the display accordingly.
         """
         anno = self.app_state.anno
         scene = self.app_state.scene
-        if self.annotation_window.winfo_viewable() and anno.redo_stack:
+        if self.deps.annotation_window.winfo_viewable() and anno.redo_stack:
             # Pop from redo stack and append to undo stack with current state
             last_polygon, last_colours, last_window = anno.redo_stack.pop()
             anno.undo_stack.append((last_polygon, scene.predictions[scene.active_source][last_polygon].copy(), last_window))
@@ -1438,21 +1119,21 @@ class Visualizer(ctk.CTk):
     def show_evaluation_panel(self):
         """Show evaluation panel, close annotation panel if open"""
         ann_flag = True
-        if self.annotation_window.winfo_viewable():
+        if self.deps.annotation_window.winfo_viewable():
             ann_flag = self.close_annotation_panel()
         if not ann_flag:
             return
         
-        if self.evaluation_panel.scene_name != self.app_state.scene.scene_name:
-            self.evaluation_panel.set_scene_name(self.app_state.scene.scene_name)
+        if self.deps.evaluation_panel.scene_name != self.app_state.scene.scene_name:
+            self.deps.evaluation_panel.set_scene_name(self.app_state.scene.scene_name)
         
-        self.evaluation_window.deiconify()
-        self.evaluation_window.focus_force()
+        self.deps.evaluation_window.deiconify()
+        self.deps.evaluation_window.focus_force()
     
     def show_annotation_panel(self):
         """Show annotation panel, close evaluation panel if open. Load existing annotation if exists."""
         eva_flag = True
-        if self.evaluation_window.winfo_viewable():
+        if self.deps.evaluation_window.winfo_viewable():
             eva_flag = self.close_evaluation_panel()
         if not eva_flag:
             return
@@ -1460,48 +1141,48 @@ class Visualizer(ctk.CTk):
         annotation_loaded = self.check_existing_annotation()
 
         if annotation_loaded:
-            self.annotation_panel.insert_existing_notes(self.app_state.anno.annotation_notes)
-            self.annotation_window.deiconify()
-            self.annotation_window.focus_force()
+            self.deps.annotation_panel.insert_existing_notes(self.app_state.anno.annotation_notes)
+            self.deps.annotation_window.deiconify()
+            self.deps.annotation_window.focus_force()
 
-        for btn in self.lbl_source_btn.values():
+        for btn in self.deps.widgets["lbl_source_btn"].values():
             btn.configure(state=ctk.DISABLED) # Disable label source selection when annotation panel is open
 
     def close_evaluation_panel(self):
         """Close evaluation panel, check for unsaved changes, reset scene name and fields, and hide the window."""
-        if self.evaluation_panel.unsaved_changes:
+        if self.deps.evaluation_panel.unsaved_changes:
             result = messagebox.askyesnocancel("Unsaved Changes", "You have unsaved evaluation data. Do you want to save before exiting?")
             if result is None:
                 return  0   # Cancel
             elif result:
-                if not self.evaluation_panel.save_evaluation():
+                if not self.deps.evaluation_panel.save_evaluation():
                     return  0   # Failed to save → don't close
         
-        self.evaluation_panel.scene_name = ""
-        self.evaluation_panel.reset_fields()
-        self.evaluation_window.withdraw()
+        self.deps.evaluation_panel.scene_name = ""
+        self.deps.evaluation_panel.reset_fields()
+        self.deps.evaluation_window.withdraw()
         return 1
 
     def close_annotation_panel(self):
         """Close annotation panel, check for unsaved changes, reset annotation fields, and hide the window."""
         anno = self.app_state.anno
-        if self.annotation_panel.unsaved_changes:
+        if self.deps.annotation_panel.unsaved_changes:
             result = messagebox.askyesnocancel("Unsaved Changes", "Your 'Custom Annotation is unsaved'. Do you want to save before exiting?")
             if result is None:
                 return  0   # Cancel
             elif result:
-                if not self.annotation_panel.save_annotation():
+                if not self.deps.annotation_panel.save_annotation():
                     return  0   # Failed to save → don't close
 
         self.reset_annotation()
         if self.app_state.overlay.show_local_segmentation:
             self.clear_local_seg()
-        self.annotation_panel.unsaved_changes = False
-        self.annotation_window.withdraw()
+        self.deps.annotation_panel.unsaved_changes = False
+        self.deps.annotation_window.withdraw()
         anno.annotation_mode = None
         self.exit_bucket_fill(None)
-        self.canvas.config(cursor="")
-        for btn in self.lbl_source_btn.values():
+        self.deps.canvas.config(cursor="")
+        for btn in self.deps.widgets["lbl_source_btn"].values():
             btn.configure(state=ctk.NORMAL) # Re-enable label source buttons when annotation panel is closed
 
         return 1
@@ -1511,26 +1192,26 @@ class Visualizer(ctk.CTk):
 
     def draw_rectangle(self):
         """Enable rectangle drawing mode."""
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.zoom_window.destroy()
+        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
+            self.deps.annotation_panel.zoom_window is not None and 
+            self.deps.annotation_panel.zoom_window.winfo_exists()):
+            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
+                self.deps.annotation_panel.zoom_window.destroy()
 
         self.app_state.anno.annotation_mode = 'rectangle'
-        self.canvas.config(cursor="crosshair")
+        self.deps.canvas.config(cursor="crosshair")
         self.reset_annotation()
 
     def draw_polygon(self):
         """Enable Polygon drawing mode."""
-        if (hasattr(self.annotation_panel, 'zoom_window') and 
-            self.annotation_panel.zoom_window is not None and 
-            self.annotation_panel.zoom_window.winfo_exists()):
-            if self.annotation_panel.zoom_window.winfo_viewable():            
-                self.annotation_panel.zoom_window.destroy()
+        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
+            self.deps.annotation_panel.zoom_window is not None and 
+            self.deps.annotation_panel.zoom_window.winfo_exists()):
+            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
+                self.deps.annotation_panel.zoom_window.destroy()
 
         self.app_state.anno.annotation_mode = 'polygon'
-        self.canvas.config(cursor="crosshair")
+        self.deps.canvas.config(cursor="crosshair")
         self.reset_annotation()
 
 
@@ -1553,9 +1234,9 @@ class Visualizer(ctk.CTk):
         if self.selected_polygon:
             if isinstance(self.selected_polygon, list):
                 for poly in self.selected_polygon:
-                    self.canvas.delete(poly)
+                    self.deps.canvas.delete(poly)
             else:
-                self.canvas.delete(self.selected_polygon)
+                self.deps.canvas.delete(self.selected_polygon)
             self.selected_polygon = None
 
         if not anno.multiple_polygons:
@@ -1572,8 +1253,8 @@ class Visualizer(ctk.CTk):
 
             self.selected_polygon.append(self.draw_single_polygon_on_canvas(polygon_points))
 
-        if self.canvas.find_withtag("polygon") and not self.app_state.overlay.show_overlay:
-                self.canvas.itemconfig("polygon", state="hidden")
+        if self.deps.canvas.find_withtag("polygon") and not self.app_state.overlay.show_overlay:
+                self.deps.canvas.itemconfig("polygon", state="hidden")
 
     def draw_single_polygon_on_canvas(self, polygon_points):
         """
@@ -1583,15 +1264,15 @@ class Visualizer(ctk.CTk):
         if len(polygon_points) == 1:
             x, y = polygon_points[0]
             r = 3  # radius for the point
-            selected_polygon = self.canvas.create_oval(
+            selected_polygon = self.deps.canvas.create_oval(
                 x - r, y - r, x + r, y + r, fill='yellow', outline='yellow', tags=("polygon",)
             )
         elif len(polygon_points) == 2:
-            selected_polygon = self.canvas.create_line(
+            selected_polygon = self.deps.canvas.create_line(
                 *polygon_points, fill='yellow', width=2, tags=("polygon",)
             )
         elif len(polygon_points) >= 3:
-            selected_polygon = self.canvas.create_polygon(
+            selected_polygon = self.deps.canvas.create_polygon(
                 polygon_points, outline='yellow', width=2, fill='', tags=("polygon",)
             )
 
@@ -1619,7 +1300,7 @@ class Visualizer(ctk.CTk):
 
             # Reset variables
             anno.annotation_mode = None
-            self.canvas.config(cursor="")
+            self.deps.canvas.config(cursor="")
 
     def reset_annotation(self):
         """Reset the annotation state."""
@@ -1627,9 +1308,9 @@ class Visualizer(ctk.CTk):
         if self.selected_polygon:
             if isinstance(self.selected_polygon, list):
                 for poly in self.selected_polygon:
-                    self.canvas.delete(poly)
+                    self.deps.canvas.delete(poly)
             else:
-                self.canvas.delete(self.selected_polygon)
+                self.deps.canvas.delete(self.selected_polygon)
             self.selected_polygon = None
 
         anno.polygon_points_img_coor = []
@@ -1672,21 +1353,21 @@ class Visualizer(ctk.CTk):
         scene.boundmasks[key] = scene.boundmasks[scene.active_source].copy()
         scene.active_source = key
 
-        if key not in self.lbl_source_btn.keys():
+        if key not in self.deps.widgets["lbl_source_btn"].keys():
             # Add custom annotation as and additional label source
             scene.lbl_sources.append(key)
             scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], scene.scene_name, "custom_annotation.png"))
-            self.lbl_source_btn[key] = ctk.CTkRadioButton(self.lbl_source_frame, 
+            self.deps.widgets["lbl_source_btn"][key] = ctk.CTkRadioButton(self.deps.widgets["lbl_source_frame"], 
                                                                 text=f"* {key}", 
-                                                                variable=self.mode_var_lbl_source, 
+                                                                variable=self.deps.widgets["mode_var_lbl_source"], 
                                                                 value=key, command=self.choose_lbl_source)
-            self.lbl_source_btn[key].grid(row=len(scene.lbl_sources), column=0, sticky="w", pady=(10, 10))
+            self.deps.widgets["lbl_source_btn"][key].grid(row=len(scene.lbl_sources), column=0, sticky="w", pady=(10, 10))
             
         else:
-            self.lbl_source_btn[key].configure(text=f"* {key}")
+            self.deps.widgets["lbl_source_btn"][key].configure(text=f"* {key}")
             
-        self.annotation_panel.unsaved_changes = True
-        self.annotation_panel.save_button.configure(state=ctk.NORMAL)
+        self.deps.annotation_panel.unsaved_changes = True
+        self.deps.annotation_panel.save_button.configure(state=ctk.NORMAL)
 
         # Store in undo stack and clear redo stack
         if anno.undo_stack and len(anno.undo_stack) > anno.stack_limit:
@@ -1694,7 +1375,7 @@ class Visualizer(ctk.CTk):
         anno.undo_stack.append((anno.selected_polygon_area_idx, scene.predictions[scene.active_source][anno.selected_polygon_area_idx].copy(), anno.selected_polygon_window))
         anno.redo_stack.clear() # Clear redo stack after new annotation
 
-        self.mode_var_lbl_source.set(key)   # set custom annotation as current label source
+        self.deps.widgets["mode_var_lbl_source"].set(key)   # set custom annotation as current label source
         scene.predictions[scene.active_source][anno.selected_polygon_area_idx] = class_color
         scene.predictions[scene.active_source][scene.land_nan_masks[scene.active_source]] = [255, 255, 255]
 
@@ -1702,9 +1383,9 @@ class Visualizer(ctk.CTk):
         # valid_polygon_idx = tuple(zip(*[(y, x) for y, x in zip(*anno.selected_polygon_area_idx) if not scene.land_nan_masks[scene.active_source][y, x]]))
 
         # Do a vectorized compare of the existing prediction (only 1 so [0]) with the new prediction to get a mask of the changed area
-        if self.show_prev_anno_switch.get():
+        if self.deps.widgets["show_prev_anno_switch"].get():
             changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
 
         img_y_min, img_y_max, img_x_min, img_x_max = anno.selected_polygon_window
         img_y_min = max(0, img_y_min-20)
@@ -1736,9 +1417,9 @@ class Visualizer(ctk.CTk):
                     img_x_min: img_x_max] = generate_boundaries(rgb2gray(scene.predictions[scene.active_source][img_y_min: img_y_max, 
                                                                                     img_x_min: img_x_max]))
         # Show annotated area on minimap
-        if self.show_prev_anno_switch.get():
+        if self.deps.widgets["show_prev_anno_switch"].get():
             changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
 
         # Reset annotation and refresh view
         self.reset_annotation()
@@ -1754,16 +1435,16 @@ class Visualizer(ctk.CTk):
         key = "Custom_Annotation"
 
         # Duplicate scene for new/updated custom annotation scene
-        if key != scene.active_source and key in self.lbl_source_btn.keys():
+        if key != scene.active_source and key in self.deps.widgets["lbl_source_btn"].keys():
             result = messagebox.askyesnocancel("Existing annotation", "You have an existing custom annotation. Do you want to use it?")
             if result is None:
                 self.reset_annotation()
                 return 0 # Cancel
             elif not result:  # No, create new annotation from choice of overlay
-                self.annotation_panel.reset_label_from()
+                self.deps.annotation_panel.reset_label_from()
 
             scene.active_source = key
-            self.mode_var_lbl_source.set(key)
+            self.deps.widgets["mode_var_lbl_source"].set(key)
             self.refresh_view()
         return 1
     
@@ -1776,11 +1457,11 @@ class Visualizer(ctk.CTk):
         scene = self.app_state.scene
         custom_anno = "Custom_Annotation"
 
-        if custom_anno in scene.lbl_sources and self.show_prev_anno_switch.get():
+        if custom_anno in scene.lbl_sources and self.deps.widgets["show_prev_anno_switch"].get():
             changed_area_mask = scene.predictions[custom_anno][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
         else:
-            self.minimap.set_image(scene.img)
+            self.deps.minimap.set_image(scene.img)
 
 
     def label_water(self, bucket_fill=False):
@@ -1815,21 +1496,21 @@ class Visualizer(ctk.CTk):
         anno = self.app_state.anno
         anno.annotation_mode = 'bucket_fill'
         anno.active_label = label
-        self.canvas.config(cursor="spraycan")
+        self.deps.canvas.config(cursor="spraycan")
         
         # Should clean this up later
         if label == "water":
-            self.annotation_panel.water_btn.configure(**self.annotation_panel.label_btn_active_style)
-            self.annotation_panel.ice_btn.configure(**self.annotation_panel.label_btn_default_style)
-            self.annotation_panel.unknown_btn.configure(**self.annotation_panel.label_btn_default_style)
+            self.deps.annotation_panel.water_btn.configure(**self.deps.annotation_panel.label_btn_active_style)
+            self.deps.annotation_panel.ice_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
+            self.deps.annotation_panel.unknown_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
         elif label == "ice":
-            self.annotation_panel.ice_btn.configure(**self.annotation_panel.label_btn_active_style)
-            self.annotation_panel.water_btn.configure(**self.annotation_panel.label_btn_default_style)
-            self.annotation_panel.unknown_btn.configure(**self.annotation_panel.label_btn_default_style)
+            self.deps.annotation_panel.ice_btn.configure(**self.deps.annotation_panel.label_btn_active_style)
+            self.deps.annotation_panel.water_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
+            self.deps.annotation_panel.unknown_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
         elif label == "unknown":
-            self.annotation_panel.unknown_btn.configure(**self.annotation_panel.label_btn_active_style)
-            self.annotation_panel.water_btn.configure(**self.annotation_panel.label_btn_default_style)
-            self.annotation_panel.ice_btn.configure(**self.annotation_panel.label_btn_default_style)
+            self.deps.annotation_panel.unknown_btn.configure(**self.deps.annotation_panel.label_btn_active_style)
+            self.deps.annotation_panel.water_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
+            self.deps.annotation_panel.ice_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
         
         self.focus_set()
 
@@ -1850,11 +1531,11 @@ class Visualizer(ctk.CTk):
         anno = self.app_state.anno
         anno.annotation_mode = None
         anno.active_label = None
-        self.canvas.config(cursor="")
-        self.annotation_panel.water_btn.configure(**self.annotation_panel.label_btn_default_style)
-        self.annotation_panel.ice_btn.configure(**self.annotation_panel.label_btn_default_style)
-        self.annotation_panel.unknown_btn.configure(**self.annotation_panel.label_btn_default_style)
-    
+        self.deps.canvas.config(cursor="")
+        self.deps.annotation_panel.water_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
+        self.deps.annotation_panel.ice_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
+        self.deps.annotation_panel.unknown_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
+
     # Change this function name later
     def select_area_local_seg(self):
         overlay = self.app_state.overlay
@@ -1865,7 +1546,7 @@ class Visualizer(ctk.CTk):
     def toggle_local_seg_source(self):
         """Toggle the source for local segmentation between HV and HH, and rerun local segmentation if area is already selected."""
         overlay = self.app_state.overlay
-        if self.annotation_panel.local_seg_switch.get():
+        if self.deps.annotation_panel.local_seg_switch.get():
             overlay.local_segmentation_source = "HV"
         else:
             overlay.local_segmentation_source = "HH"
@@ -1940,11 +1621,11 @@ class Visualizer(ctk.CTk):
     def on_close(self):
 
         ann_flag = True
-        if self.annotation_window.winfo_viewable():
+        if self.deps.annotation_window.winfo_viewable():
             ann_flag = self.close_annotation_panel()
 
         eva_flag = True
-        if self.evaluation_window.winfo_viewable():
+        if self.deps.evaluation_window.winfo_viewable():
             eva_flag = self.close_evaluation_panel()
         
         if ann_flag and eva_flag:
