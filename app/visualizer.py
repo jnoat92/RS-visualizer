@@ -26,6 +26,8 @@ from core.contrast_handler import enhance_outlier_slider
 from app.state import AppState
 from app.dependencies import AppDeps
 from ui.visualizer_layout import build_visualizer_layout
+from controllers.scene_controller import SceneController
+from controllers.display_controller import DisplayController
 
 
 class Visualizer(ctk.CTk):
@@ -78,6 +80,9 @@ class Visualizer(ctk.CTk):
             widgets=layout.widgets,
         )
 
+        self.scene_controller = SceneController(self.deps)
+        self.display_controller = DisplayController(self.deps)
+
         #%% INITIAL VISUALIZATION / STATE
 
         display.channel_mode = self.deps.widgets['mode_var_color_composite'].get()
@@ -123,289 +128,31 @@ class Visualizer(ctk.CTk):
         self.deps.widgets['lbl_source_btn'][lbl_source].grid(row=i+1, column=0, sticky="w", pady=(10, 10))
 
     def load_pred(self):
-        """
-        Load prediction files for the current scene, check if custom annotation already exists and load it
-        Also updates the label source selection widgets based on available label sources.
-        """
-
-        scene = self.app_state.scene
-        anno = self.app_state.anno
-
-        scene.predictions = {}
-        scene.land_nan_masks = {}
-        scene.boundmasks = {}
-
-        model_paths = []
-        model_folder = resource_path("model")
-
-        for file in os.listdir(model_folder):
-            if file.endswith(".pt"):
-                 model_paths.append(file)
-
-        model_path = model_paths[0] if model_paths else None
-        model_path = os.path.join(model_folder, model_path) if model_path else None
-        variables = run_pred_model(scene.lbl_sources[0], scene.rcm_200m_data, scene.base_land_mask, 
-                                                                  model_path=model_path, 
-                                                                  target_width = scene.rcm_scaled_data["dst_width"],
-                                                                  target_height = scene.rcm_scaled_data["dst_height"],
-                                                                  target_spacing=scene.target_spacing, device='cpu')
-        
-        existing_anno, anno.annotation_notes = load_existing_annotation(scene.scene_name)
-
-        if existing_anno is not None:
-            variables.append(existing_anno)
-            scene.lbl_sources.append("Custom_Annotation")
-            scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], scene.scene_name, "custom_annotation.png"))
-        self.deps.annotation_panel.clear_notes()
-        
-        # Reset label source radio buttons
-        for key in self.deps.widgets['lbl_source_btn'].keys():
-            self.deps.widgets['lbl_source_btn'][key].destroy()
-        self.deps.widgets['lbl_source_btn'] = {}
-        self.deps.widgets['mode_var_lbl_source'] = None
-        self.deps.widgets['mode_var_lbl_source_prev'] = None
-
-        # Add available label sources
-        for i, (key, pred, land_nan_mask, boundmask) in enumerate(variables):
-            if pred is None: 
-                if key != 'Custom_Annotation':
-                    messagebox.showinfo("Error", f"The selected scene does not contain prediction files for {key}.", parent=self.master)
-                continue
-            self.update_label_source_widgets(key, i)
-            scene.predictions[key] = pred
-            scene.land_nan_masks[key] = land_nan_mask
-            scene.boundmasks[key] = boundmask
-
-        custom_anno = "Custom_Annotation"
-        if custom_anno in scene.lbl_sources:
-            result = messagebox.askyesno("Custom Annotation Found",
-                                         "An existing custom annotation was found for this scene. Do you want to view it?",
-                                         parent=self.master)
-            if result:
-                scene.active_source = custom_anno
-                self.deps.widgets['mode_var_lbl_source'].set(custom_anno)
-
-            self.choose_image() # Refresh image to show annotation on minimap
+        self.scene_controller.load_pred()
 
 
     # Display handle
 
     def set_overlay(self):
-        """
-        Set the overlay for the current scene based on the current predictions, boundaries, landmask, local seg, and opacity.
-        """
-        self.overlay = compose_overlay(self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, 
-                                    self.local_boundmask_resized, self.app_state.overlay.alpha)
+        self.display_controller.set_overlay()
 
     def choose_image(self):
-        """
-        Update the displayed image and minimap based on the current active label.
-        """
-        scene = self.app_state.scene
-        display = self.app_state.display
-        scene.img = self.img_[display.channel_mode]
-        custom_anno = "Custom_Annotation"
-
-        # Check if custom annotation exists and if user wants to show it on minimap
-        if custom_anno in scene.lbl_sources and self.deps.widgets['show_prev_anno_switch'].get():
-            changed_area_mask = scene.predictions[custom_anno][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
-        else:
-            self.deps.minimap.set_image(scene.img)
+        self.display_controller.choose_image()
 
     def display_image(self):
-        """
-        Display the current image with overlay on the canvas.
-        """
-        image = self.overlay if self.app_state.overlay.show_overlay else self.img_resized.astype('uint8')
-
-        self.tk_image = ImageTk.PhotoImage(Image.fromarray(image))
-
-        self.deps.canvas.delete("main_image")  # Remove previous image
-        self.deps.canvas.create_image(self.draw_x, self.draw_y, anchor=tk.NW, image=self.tk_image, tags=("main_image"))
-
+        self.display_controller.display_image()
     
     def refresh_view(self):
-        """
-        Refresh the displayed image and minimap viewport based on the current view settings (zoom, pan) and display settings (contrast, brightness).
-        """
-
-        view = self.app_state.view
-        scene = self.app_state.scene
-        display = self.app_state.display
-        overlay = self.app_state.overlay
-        # NEXT STEP: Group the returns, and optimize crop_resize, right now it's the bottleneck for performance on contrast change
-        self.pred_resized, self.img_resized, self.boundmask_resized, self.landmask_resized, self.local_boundmask_resized, self.draw_x, self.draw_y = crop_resize(
-                    scene.predictions[scene.active_source], scene.img, scene.boundmasks[scene.active_source], scene.land_nan_masks[scene.active_source], 
-                    overlay.local_segmentation_bounds, scene.nan_mask["HH"], view.zoom_factor, view.offset_x, view.offset_y, display.brightness,
-                    self.deps.canvas.winfo_width(), self.deps.canvas.winfo_height(), overlay.show_local_segmentation)
-        self.set_overlay()
-        self.display_image()
-
-        # Update minimap viewport
-        self.deps.minimap.set_viewport_rect(scene.img, view.zoom_factor, view.offset_x, view.offset_y, self.deps.canvas.winfo_width(), self.deps.canvas.winfo_height())
+        self.display_controller.refresh_view()
 
     def refresh_all(self):
-        self.refresh_view()
-
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
-
-        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
-            self.deps.annotation_panel.zoom_window is not None and 
-            self.deps.annotation_panel.zoom_window.winfo_exists()):
-            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
-                self.deps.annotation_panel.update_zoomed_display()
+        self.display_controller.refresh_all()
 
 
     # Image selection handle
 
     def choose_SAR_scene(self):
-        """
-        Open a file dialog to select a SAR scene directory, load the images that scene, generate the predictions, and update the display.
-        """
-
-        scene = self.app_state.scene
-        display = self.app_state.display
-        anno = self.app_state.anno
-
-        self.close_evaluation_panel()
-        self.close_annotation_panel()
-        
-        prev_folder_path = scene.folder_path
-
-        root = ctk.CTk()
-        root.withdraw()
-        scene.folder_path = filedialog.askdirectory(initialdir=os.path.dirname(prev_folder_path) if scene.folder_path else os.getcwd(),
-                                                   title='Select the dated directory containing HH/HV images')
-        root.destroy()
-
-        if scene.folder_path:
-
-            if scene.folder_path == prev_folder_path:
-                return
-
-            scene.scene_name = scene.folder_path.split('/')[-1]
-
-            self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
-
-            # Show loading bar
-            self.deps.loading_bar_label.grid(row=0, column=0)
-            self.deps.loading_bar.grid(row=1, column=0)
-            self.update_idletasks()
-
-            self.deps.loading_bar.set(0) # Update loading bar after loading images
-            self.deps.loading_bar_label.configure(text="Loading images...")
-            self.update_idletasks() # Force UI update to show loading bar progress
-
-            try:
-                rcm_data = load_rcm_product(scene.folder_path)
-            except (FileNotFoundError, ValueError) as e:
-                messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{e}", parent=self.master)
-                scene.folder_path = ''
-                self.deps.loading_bar.set(0) # Update loading bar after loading images
-                self.deps.loading_bar_label.configure(text="Error loading images")
-                self.update_idletasks()
-                return
-
-            self.deps.loading_bar.set(0.2) # Update loading bar after loading images
-            self.deps.loading_bar_label.configure(text="Scaling images...")
-            self.update_idletasks()      
-
-            # Scale image
-            rcm_200m_data, rcm_scaled_data = scale_hh_hv(rcm_data, target_spacing=scene.target_spacing)
-
-            self.deps.loading_bar.set(0.35) # Update loading bar after loading images
-            self.deps.loading_bar_label.configure(text="Building land mask...")
-            self.update_idletasks()
-
-            # Build land masks
-            land_mask = build_land_masks(rcm_scaled_data)
-
-
-            self.deps.loading_bar.set(0.5) # Update loading bar after loading images
-            self.deps.loading_bar_label.configure(text="Normalizing data...")
-            self.update_idletasks()  
-
-            # Normalize and prepare images
-            raw_img, orig_img, hist, n_valid, nan_mask, geo_coord_helpers = normalize_and_prepare_images(rcm_scaled_data)
-
-            # Save raw images to app state for later use (e.g., layering)
-            scene.raw_img = raw_img
-            scene.orig_img = orig_img
-            scene.hist = hist
-            scene.n_valid = n_valid
-            scene.nan_mask = nan_mask
-            scene.base_land_mask = land_mask
-            scene.rcm_200m_data = rcm_200m_data
-            scene.rcm_scaled_data = rcm_scaled_data
-
-            # Save geo coord helpers to app state for later use
-            scene.geo_coord_helpers = geo_coord_helpers
-            scene.tie_lines = rcm_data.get("tie_lines", None)
-            scene.tie_pixels = rcm_data.get("tie_pixels", None)
-            scene.tie_lats = rcm_data.get("tie_lats", None)
-            scene.tie_lons = rcm_data.get("tie_lons", None)
-
-            # Build tiepoint grid interpolator if available
-            if scene.tie_lines is not None:
-                rows, cols, lat_grid, lon_grid = tiepoints_1d_to_grid(scene.tie_lines, scene.tie_pixels, scene.tie_lats, scene.tie_lons)
-                self.pix2ll = make_pix2ll(rows, cols, lat_grid, lon_grid)
-
-            self.img_ = orig_img
-            
-            self.img_["(HH, HH, HV)"] = layer_imagery(
-                orig_img["HH"],
-                orig_img["HV"],
-                stack="(HH, HH, HV)"
-            )
-            self.img_["(HH, HV, HV)"] = layer_imagery(
-                orig_img["HH"],
-                orig_img["HV"],
-                stack="(HH, HV, HV)"
-            )
-            
-            # Handle switching scenes with existing custom annotation to one without
-            if "Custom_Annotation" in scene.lbl_sources:
-                scene.filenames.pop()
-                scene.lbl_sources.pop()
-
-            self.choose_image()
-
-            self.deps.loading_bar.set(0.6)
-            self.deps.loading_bar_label.configure(text="Generating prediction...")
-            self.update_idletasks()
-
-            self.load_pred()
-
-            if not self.choose_lbl_source(plot=False):
-                scene.folder_path = ''
-                return
-            self.update_idletasks()
-            self.after(100, self.reset_zoom)    # Delay the initial reset call with .after() so the canvas has its final size:
-            
-            self._set_all_children_enabled(self.deps.sidebar, True)
-            if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
-                self.deps.widgets["hh_hv_switch"].configure(state=ctk.DISABLED)
-
-            # Reset annotation stacks
-            anno.undo_stack.clear()
-            anno.redo_stack.clear()
-
-            self.deps.widgets["contrast_slider"].set(0) # reset to default
-            self.app_state.display.contrast = 0.0
-            self.deps.widgets["brightness_slider"].set(0) # reset to default
-            self.app_state.display.brightness = 0.0
-
-            self.deps.loading_bar.set(1)
-            self.deps.loading_bar_label.configure(text="Inference complete")
-            self.update_idletasks()
-
-            self.after(3000, self.deps.loading_bar_label.grid_remove) # Hide loading bar after short delay
-            self.after(3000, self.deps.loading_bar.grid_remove) # Hide loading bar after short delay
-
-        else:
-            scene.folder_path = prev_folder_path
+        self.scene_controller.choose_SAR_scene()
 
     def color_composite(self):
         """
@@ -1061,7 +808,7 @@ class Visualizer(ctk.CTk):
                 if scene.geo_coord_helpers["transformer"] is None:
                     row_src, col_src = ds_to_src_pixel(y, x, scene.rcm_scaled_data["src_height"], scene.rcm_scaled_data["src_width"],
                                                     scene.rcm_scaled_data["dst_height"], scene.rcm_scaled_data["dst_width"])
-                    lat, lon = self.pix2ll(row_src, col_src)
+                    lat, lon = scene.pix2ll(row_src, col_src)
                 else:
                     # Convert downscaled image coordinates to original image coordinates
                     # x and y (row and col) are flipped so flip back before geocoding

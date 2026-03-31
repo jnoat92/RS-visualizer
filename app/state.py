@@ -40,8 +40,13 @@ class SceneState:
     raw_img: dict[str, np.ndarray] = field(default_factory=dict)
     orig_img: dict[str, np.ndarray] = field(default_factory=dict)
 
+    # Store color composites
+    color_composites: dict[str, np.ndarray] = field(default_factory=dict)
+
     # Target spacing for RCM data (e.g., 200m or 100m)
     target_spacing: int = 100
+
+    pix2ll: object = None # Function to convert pixel coordinates to lat/lon, created from tie points if available
 
     # Store histogram data for contrast enhancement
     contrast_img: dict[str, np.ndarray] = field(default_factory=dict)
