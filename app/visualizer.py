@@ -3,7 +3,7 @@ Visualizer module for Remote Sensing Visualizer application
 
 Contains the Visualizer class which manages the GUI and image processing.
 
-Last modified: Mar 2026
+Last modified: Apr 2026
 '''
 import customtkinter as ctk
 import tkinter as tk
@@ -28,6 +28,8 @@ from app.dependencies import AppDeps
 from ui.visualizer_layout import build_visualizer_layout
 from controllers.scene_controller import SceneController
 from controllers.display_controller import DisplayController
+from controllers.image_controls_controller import ImageControlsController
+from controllers.annotation_controller import AnnotationController
 
 
 class Visualizer(ctk.CTk):
@@ -57,9 +59,7 @@ class Visualizer(ctk.CTk):
 
         # Annotation state
         self.annotation_mode = None  # 'rectangle' or None
-        self.selected_polygon = None   # Current canvas item being drawn
         self.double_click_flag = False
-        self.reset_annotation()
 
         layout = build_visualizer_layout(self, self.app_state)
 
@@ -82,8 +82,14 @@ class Visualizer(ctk.CTk):
 
         self.scene_controller = SceneController(self.deps)
         self.display_controller = DisplayController(self.deps)
+        self.image_controls_controller = ImageControlsController(
+                                            self.deps, 
+                                            self.display_controller
+                                            )
+        self.annotation_controller = AnnotationController(self.deps, self.display_controller)
 
         #%% INITIAL VISUALIZATION / STATE
+        self.reset_annotation()
 
         display.channel_mode = self.deps.widgets['mode_var_color_composite'].get()
         if display.channel_mode == "(HH/HV)":
@@ -155,157 +161,32 @@ class Visualizer(ctk.CTk):
         self.scene_controller.choose_SAR_scene()
 
     def color_composite(self):
-        """
-        Handle color composite selection changes, enable/disable HH/HV switch accordingly, and update the displayed image.
-        """
-        display = self.app_state.display
-        display.channel_mode = self.deps.widgets["mode_var_color_composite"].get()
-
-        if display.channel_mode == "(HH/HV)":
-            self.deps.widgets["hh_hv_switch"].configure(state=ctk.NORMAL)
-            self.HH_HV(get_channel=True)
-        else:
-            self.deps.widgets["hh_hv_switch"].configure(state=ctk.DISABLED)
-            self.HH_HV(get_channel=False)
+        self.image_controls_controller.color_composite()
 
         
     def HH_HV(self, get_channel=True):
-        """
-        Handle color composite changes, update the displayed image based on the selected channel, and reset contrast slider.
-        """
-        display = self.app_state.display
-        scene = self.app_state.scene
-
-        if get_channel:
-            display.channel_mode = "HV" if self.deps.widgets["hh_hv_switch"].get() else "HH"
-
-        self.deps.widgets["contrast_slider"].set(0)  # Reset contrast slider
-        self.contrast_slider_handle(0)
-
-        self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
-        self.choose_image()
-
-        self.refresh_all()
+        self.image_controls_controller.HH_HV(get_channel)
 
     # Image handle
     def contrast_slider_handle(self, val):
-        """
-        Handle contrast slider changes, apply contrast enhancement to the current image based on the selected channel(s), and refresh the display.
-        """
-        scene = self.app_state.scene
-        display = self.app_state.display
-
-        display.contrast = (val/200) * 0.15
-
-        if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
-            HH_contrasted = enhance_outlier_slider(
-                img_u8=scene.orig_img["HH"], # Pass raw image for faster processing
-                hist=scene.hist["HH"],
-                n_valid=scene.n_valid["HH"],
-                s=display.contrast
-            )
-
-            HV_contrasted = enhance_outlier_slider(
-                img_u8=scene.orig_img["HV"], # Pass raw image for faster processing
-                hist=scene.hist["HV"],
-                n_valid=scene.n_valid["HV"],
-                s=display.contrast
-            )
-
-            # Re-layer the imagery with new contrast
-            scene.img = layer_imagery(
-                HH_contrasted,
-                HV_contrasted,
-                display.channel_mode
-            )
-        else:
-            scene.img = enhance_outlier_slider(
-                img_u8=scene.orig_img[display.channel_mode], # Pass raw image for faster processing
-                hist=scene.hist[display.channel_mode],
-                n_valid=scene.n_valid[display.channel_mode],
-                s=display.contrast
-            )
-
-        self.refresh_all()
+        self.image_controls_controller.contrast_slider_handle(val)
 
     def right_click_contrast_reset(self, event):
-        """
-        Handle right-click on contrast slider to reset contrast to default, refresh the display.
-        """
-        self.deps.widgets["contrast_slider"].set(0) # reset to default
-        self.app_state.display.contrast = 0.0
-        self.contrast_slider_handle(0)
-        self.refresh_all()
+        self.image_controls_controller.right_click_contrast_reset(event)
 
     def brightness_slider_handle(self,val):
-        """
-        Handle brightness slider changes, update the displayed image based on the selected channel, and refresh the display.
-        """
-        self.app_state.display.brightness = float(val)/100
-        self.refresh_all()
+        self.image_controls_controller.brightness_slider_handle(val)
 
     def right_click_brightness_reset(self, event):
-        """
-        Handle right-click on brightness slider to reset brightness to default, refresh the display.
-        """
-        self.deps.widgets["brightness_slider"].set(0) # reset to default
-        self.app_state.display.brightness = 0.0
-        self.refresh_all()
+        self.image_controls_controller.right_click_brightness_reset(event)
 
     # Segmentation handle
 
     def opacity_slider_handle(self, val):
-        """
-        Handle opacity slider changes, update the overlay opacity, and refresh the display.
-        """
-        self.app_state.overlay.alpha = float(val)/100
-        self.set_overlay()
-        self.display_image()
-
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
-
-        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
-            self.deps.annotation_panel.zoom_window is not None and 
-            self.deps.annotation_panel.zoom_window.winfo_exists()):
-            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
-                self.deps.annotation_panel.update_zoomed_display()
+        self.image_controls_controller.opacity_slider_handle(val)
 
     def segmentation_toggle(self):
-        """
-        Handle segmentation overlay toggle, update the button appearance based on the state, and refresh the display.
-        When 'OFF' just show base image, when 'ON' show overlay
-        """
-        overlay_state = self.app_state.overlay
-        overlay_state.show_overlay = not overlay_state.show_overlay
-        state = "ON" if overlay_state.show_overlay else "OFF"
-        self.deps.widgets["segmentation_toggle_btn"].configure(text=state)
-
-        self.display_image()
-
-        if overlay_state.show_overlay:
-            # Restore default appearance
-            self.deps.widgets["segmentation_toggle_btn"].configure(
-                fg_color=self.deps.widgets["default_fg_color"],  # Default customtkinter blue
-                hover_color=self.deps.widgets["default_hover_color"],
-                text_color=self.deps.widgets["default_text_color"]
-            )
-        else:
-            # Set to gray when OFF
-            self.deps.widgets["segmentation_toggle_btn"].configure(
-                fg_color="#888888",     # Gray background
-                hover_color="#777777",  # Slightly darker on hover
-                text_color="white"
-            )
-
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
-
-        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
-            self.deps.annotation_panel.zoom_window is not None and 
-            self.deps.annotation_panel.zoom_window.winfo_exists()):
-            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
-                self.deps.annotation_panel.update_zoomed_display()
+        self.image_controls_controller.segmentation_toggle()
 
 
     # Zoom handle
@@ -541,7 +422,7 @@ class Visualizer(ctk.CTk):
             self.selection_rect_id = self.deps.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='blue', width=2)
         elif anno.annotation_mode == 'rectangle':
                 self.selection_start_coord = (event.x, event.y)
-                self.selected_polygon = self.deps.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='yellow', width=2)
+                anno.selected_polygon = self.deps.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='yellow', width=2)
         elif anno.annotation_mode == 'polygon':
                 self._add_polygon_point(event)
         elif anno.annotation_mode == 'bucket_fill':
@@ -580,7 +461,7 @@ class Visualizer(ctk.CTk):
         elif anno.annotation_mode == 'rectangle' and self.selection_start_coord:
             x0, y0 = self.selection_start_coord
             x1, y1 = event.x, event.y
-            self.deps.canvas.coords(self.selected_polygon, x0, y0, x1, y1)
+            self.deps.canvas.coords(anno.selected_polygon, x0, y0, x1, y1)
         elif view.pan_start_screen:
             # Pan mode
             dx = event.x - view.pan_start_screen[0]
@@ -938,350 +819,69 @@ class Visualizer(ctk.CTk):
     # Annotation options
 
     def draw_rectangle(self):
-        """Enable rectangle drawing mode."""
-        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
-            self.deps.annotation_panel.zoom_window is not None and 
-            self.deps.annotation_panel.zoom_window.winfo_exists()):
-            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
-                self.deps.annotation_panel.zoom_window.destroy()
-
-        self.app_state.anno.annotation_mode = 'rectangle'
-        self.deps.canvas.config(cursor="crosshair")
-        self.reset_annotation()
+        self.annotation_controller.draw_rectangle()
 
     def draw_polygon(self):
-        """Enable Polygon drawing mode."""
-        if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
-            self.deps.annotation_panel.zoom_window is not None and 
-            self.deps.annotation_panel.zoom_window.winfo_exists()):
-            if self.deps.annotation_panel.zoom_window.winfo_viewable():            
-                self.deps.annotation_panel.zoom_window.destroy()
-
-        self.app_state.anno.annotation_mode = 'polygon'
-        self.deps.canvas.config(cursor="crosshair")
-        self.reset_annotation()
+        self.annotation_controller.draw_polygon()
 
 
 
     def _add_polygon_point(self, event):
-        """Add a point to the polygon."""
-        view = self.app_state.view
-        anno = self.app_state.anno
-        if anno.annotation_mode == 'polygon':
-            anno.polygon_points_img_coor.append((int((event.x - view.offset_x) / view.zoom_factor), 
-                                                 int((event.y - view.offset_y) / view.zoom_factor)))
-            
-            self.draw_polygon_on_canvas()
+        self.annotation_controller.add_polygon_point(event)
     
     def draw_polygon_on_canvas(self):
-        """Draw the polygon defined by the image coordinates on the canvas, converting to canvas coordinates."""
-        view = self.app_state.view
-        anno = self.app_state.anno
-        # Remove existing polygon if exists before drawing new one
-        if self.selected_polygon:
-            if isinstance(self.selected_polygon, list):
-                for poly in self.selected_polygon:
-                    self.deps.canvas.delete(poly)
-            else:
-                self.deps.canvas.delete(self.selected_polygon)
-            self.selected_polygon = None
-
-        if not anno.multiple_polygons:
-            polygon_points_img_coor = [anno.polygon_points_img_coor]
-        else:
-            polygon_points_img_coor = anno.polygon_points_img_coor
-        
-        self.selected_polygon = []
-        for p_img_coor in polygon_points_img_coor:
-            polygon_points = [
-                (x * view.zoom_factor + view.offset_x, 
-                 y * view.zoom_factor + view.offset_y) for x, y in p_img_coor
-            ]
-
-            self.selected_polygon.append(self.draw_single_polygon_on_canvas(polygon_points))
-
-        if self.deps.canvas.find_withtag("polygon") and not self.app_state.overlay.show_overlay:
-                self.deps.canvas.itemconfig("polygon", state="hidden")
+        self.annotation_controller.draw_polygon_on_canvas()
 
     def draw_single_polygon_on_canvas(self, polygon_points):
-        """
-        Draw a single polygon on the canvas based on the number of points (1 for point, 2 for line, 3+ for polygon) and 
-        return the canvas item ID.
-        """
-        if len(polygon_points) == 1:
-            x, y = polygon_points[0]
-            r = 3  # radius for the point
-            selected_polygon = self.deps.canvas.create_oval(
-                x - r, y - r, x + r, y + r, fill='yellow', outline='yellow', tags=("polygon",)
-            )
-        elif len(polygon_points) == 2:
-            selected_polygon = self.deps.canvas.create_line(
-                *polygon_points, fill='yellow', width=2, tags=("polygon",)
-            )
-        elif len(polygon_points) >= 3:
-            selected_polygon = self.deps.canvas.create_polygon(
-                polygon_points, outline='yellow', width=2, fill='', tags=("polygon",)
-            )
-
-        return selected_polygon
+        self.annotation_controller.draw_single_polygon_on_canvas(polygon_points)
 
     def _finish_polygon(self):
-        """Finish drawing a polygon and store it."""
-        scene = self.app_state.scene
-        anno = self.app_state.anno
-        img_points = anno.polygon_points_img_coor
-        if len(img_points) >= 3:
-
-            img_x_min = max(0, min(x for x, y in img_points))
-            img_y_min = max(0, min(y for x, y in img_points))
-            img_x_max = min(scene.img.shape[1], max(x for x, y in img_points))
-            img_y_max = min(scene.img.shape[0], max(y for x, y in img_points))
-            if img_x_max > img_x_min and img_y_max > img_y_min:
-                anno.selected_polygon_window = (img_y_min, img_y_max, img_x_min, img_x_max)
-
-                mask = np.zeros((img_y_max - img_y_min, img_x_max - img_x_min), dtype=np.uint8)
-                shifted_points = [(x - img_x_min, y - img_y_min) for x, y in img_points]
-                cv2.fillPoly(mask, [np.array(shifted_points, dtype=np.int32)], 255)
-                anno.selected_polygon_area_idx = [(y + img_y_min, x + img_x_min) for y, x in zip(*np.where(mask==255))]
-                anno.selected_polygon_area_idx = tuple(zip(*anno.selected_polygon_area_idx))
-
-            # Reset variables
-            anno.annotation_mode = None
-            self.deps.canvas.config(cursor="")
+        self.annotation_controller.finish_polygon()
 
     def reset_annotation(self):
-        """Reset the annotation state."""
-        anno = self.app_state.anno
-        if self.selected_polygon:
-            if isinstance(self.selected_polygon, list):
-                for poly in self.selected_polygon:
-                    self.deps.canvas.delete(poly)
-            else:
-                self.deps.canvas.delete(self.selected_polygon)
-            self.selected_polygon = None
-
-        anno.polygon_points_img_coor = []
-        anno.selected_polygon_window = None
-        anno.selected_polygon_area_idx = None
-        anno.multiple_polygons = False
+        self.annotation_controller.reset_annotation()
 
 
     def annotate_class(self, class_color=[0, 0, 0]):
-        """
-        Annotate the selected polygon area with the specified class color, update the Custom Annotation layer, 
-        handle undo/redo stacks, and refresh the display.
-        """
-        scene = self.app_state.scene
-        anno = self.app_state.anno
-
-        if anno.selected_polygon_area_idx is None:
-            if anno.annotation_mode == 'polygon':
-                if len(anno.polygon_points_img_coor) < 3:
-                    messagebox.showinfo("Error", "Polygon incomplete.", parent=self.master)
-                    return
-                else:
-                    self._finish_polygon()
-            else:
-                messagebox.showinfo("Error", "Please select a polygon area first.", parent=self.master)
-                return
-        elif scene.land_nan_masks[scene.active_source][anno.selected_polygon_area_idx].all():
-            messagebox.showinfo("Error", "Selected area is land or invalid data.", parent=self.master)
-            self.reset_annotation()
-            return
-        
-        # Check if this area is already annotated with the selected class.
-        if (scene.predictions[scene.active_source][anno.selected_polygon_area_idx] == class_color).all():
-            return
-        
-        key = "Custom_Annotation"
-
-        scene.predictions[key] = scene.predictions[scene.active_source].copy()
-        scene.land_nan_masks[key] = scene.land_nan_masks[scene.active_source].copy()
-        scene.boundmasks[key] = scene.boundmasks[scene.active_source].copy()
-        scene.active_source = key
-
-        if key not in self.deps.widgets["lbl_source_btn"].keys():
-            # Add custom annotation as and additional label source
-            scene.lbl_sources.append(key)
-            scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], scene.scene_name, "custom_annotation.png"))
-            self.deps.widgets["lbl_source_btn"][key] = ctk.CTkRadioButton(self.deps.widgets["lbl_source_frame"], 
-                                                                text=f"* {key}", 
-                                                                variable=self.deps.widgets["mode_var_lbl_source"], 
-                                                                value=key, command=self.choose_lbl_source)
-            self.deps.widgets["lbl_source_btn"][key].grid(row=len(scene.lbl_sources), column=0, sticky="w", pady=(10, 10))
-            
-        else:
-            self.deps.widgets["lbl_source_btn"][key].configure(text=f"* {key}")
-            
-        self.deps.annotation_panel.unsaved_changes = True
-        self.deps.annotation_panel.save_button.configure(state=ctk.NORMAL)
-
-        # Store in undo stack and clear redo stack
-        if anno.undo_stack and len(anno.undo_stack) > anno.stack_limit:
-            anno.undo_stack.pop(0)  # Remove oldest entry if stack limit exceeded
-        anno.undo_stack.append((anno.selected_polygon_area_idx, scene.predictions[scene.active_source][anno.selected_polygon_area_idx].copy(), anno.selected_polygon_window))
-        anno.redo_stack.clear() # Clear redo stack after new annotation
-
-        self.deps.widgets["mode_var_lbl_source"].set(key)   # set custom annotation as current label source
-        scene.predictions[scene.active_source][anno.selected_polygon_area_idx] = class_color
-        scene.predictions[scene.active_source][scene.land_nan_masks[scene.active_source]] = [255, 255, 255]
-
-        # # Show annotated area on minimap (excluding land and invalid areas)
-        # valid_polygon_idx = tuple(zip(*[(y, x) for y, x in zip(*anno.selected_polygon_area_idx) if not scene.land_nan_masks[scene.active_source][y, x]]))
-
-        # Do a vectorized compare of the existing prediction (only 1 so [0]) with the new prediction to get a mask of the changed area
-        if self.deps.widgets["show_prev_anno_switch"].get():
-            changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
-
-        img_y_min, img_y_max, img_x_min, img_x_max = anno.selected_polygon_window
-        img_y_min = max(0, img_y_min-20)
-        img_y_max = min(scene.predictions[scene.active_source].shape[0], img_y_max+20)
-        img_x_min = max(0, img_x_min-20)
-        img_x_max = min(scene.predictions[scene.active_source].shape[1], img_x_max+20)
-        scene.boundmasks[scene.active_source][img_y_min: img_y_max, 
-                    img_x_min: img_x_max] = generate_boundaries(rgb2gray(scene.predictions[scene.active_source][img_y_min: img_y_max, 
-                                                                                    img_x_min: img_x_max]))
-
-        self.refresh_view()
-        if anno.polygon_points_img_coor: 
-                self.draw_polygon_on_canvas()
+        self.annotation_controller.annotate_class(class_color)
 
     def undo_redo_annotation(self, last_polygon_area_idx, last_colours, last_window):
-        """Undo or redo an annotation by restoring the previous state."""
-        scene = self.app_state.scene
-
-        # Change colours in the polygon area back to the last colours
-        scene.predictions[scene.active_source][last_polygon_area_idx] = last_colours
-
-        # Find new boundaries in the affected area
-        img_y_min, img_y_max, img_x_min, img_x_max = last_window
-        img_y_min = max(0, img_y_min-20)
-        img_y_max = min(scene.predictions[scene.active_source].shape[0], img_y_max+20)
-        img_x_min = max(0, img_x_min-20)
-        img_x_max = min(scene.predictions[scene.active_source].shape[1], img_x_max+20)
-        scene.boundmasks[scene.active_source][img_y_min: img_y_max, 
-                    img_x_min: img_x_max] = generate_boundaries(rgb2gray(scene.predictions[scene.active_source][img_y_min: img_y_max, 
-                                                                                    img_x_min: img_x_max]))
-        # Show annotated area on minimap
-        if self.deps.widgets["show_prev_anno_switch"].get():
-            changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
-
-        # Reset annotation and refresh view
-        self.reset_annotation()
-        self.refresh_view()
+        self.annotation_controller.undo_redo_annotation(last_polygon_area_idx, last_colours, last_window)
 
 
     def check_existing_annotation(self):
-        """
-        Check for existing custom annotation, prompt user to use it or create new annotation from the prediction, 
-        and set active source to custom annotation if not canceled.
-        """
-        scene = self.app_state.scene
-        key = "Custom_Annotation"
-
-        # Duplicate scene for new/updated custom annotation scene
-        if key != scene.active_source and key in self.deps.widgets["lbl_source_btn"].keys():
-            result = messagebox.askyesnocancel("Existing annotation", "You have an existing custom annotation. Do you want to use it?")
-            if result is None:
-                self.reset_annotation()
-                return 0 # Cancel
-            elif not result:  # No, create new annotation from choice of overlay
-                self.deps.annotation_panel.reset_label_from()
-
-            scene.active_source = key
-            self.deps.widgets["mode_var_lbl_source"].set(key)
-            self.refresh_view()
-        return 1
+        return self.annotation_controller.check_existing_annotation()
     
     def toggle_show_anno_on_minimap(self):
-        """
-        Toggle the display of the annotated area on the minimap by comparing the 
-        current annotation with the original prediction and showing the changed area 
-        if the switch is on, or resetting to the original image if the switch is off.
-        """
-        scene = self.app_state.scene
-        custom_anno = "Custom_Annotation"
-
-        if custom_anno in scene.lbl_sources and self.deps.widgets["show_prev_anno_switch"].get():
-            changed_area_mask = scene.predictions[custom_anno][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
-        else:
-            self.deps.minimap.set_image(scene.img)
+        self.annotation_controller.toggle_show_anno_on_minimap()
 
 
     def label_water(self, bucket_fill=False):
-        """Label selected polygon as water with specified color, check if called from bucket fill."""
-        # Check if called by left click or bucket fill
-        if not bucket_fill and self.app_state.anno.annotation_mode == 'bucket_fill':
-            self.exit_bucket_fill(None)
-        self.annotate_class([0, 255, 255])
+        self.annotation_controller.label_water(bucket_fill)
 
     def label_ice(self, bucket_fill=False):
-        """Label selected polygon as ice with specified color, check if called from bucket fill."""
-        if not bucket_fill and self.app_state.anno.annotation_mode == 'bucket_fill':
-            self.exit_bucket_fill(None)
-        self.annotate_class([255, 130, 0])
+        self.annotation_controller.label_ice(bucket_fill)
 
     def label_shoal(self):
-        self.annotate_class([0, 255, 0])
+        self.annotation_controller.label_shoal()
 
     def label_ship(self):
-        self.annotate_class([255, 255, 0])
+        self.annotation_controller.label_ship()
 
     def label_iceberg(self):
-        self.annotate_class([255, 0, 255])
+        self.annotation_controller.label_iceberg()
 
     def label_unknown(self, bucket_fill=False):
-        if not bucket_fill and self.app_state.anno.annotation_mode == 'bucket_fill':
-            self.exit_bucket_fill(None)
-        self.annotate_class([150, 150, 150])
+        self.annotation_controller.label_unknown(bucket_fill)
 
     def bucket_fill(self, event, label):
-        """Enable bucket fill mode for the specified label, set cursor, and update annotation panel button styles."""
-        anno = self.app_state.anno
-        anno.annotation_mode = 'bucket_fill'
-        anno.active_label = label
-        self.deps.canvas.config(cursor="spraycan")
-        
-        # Should clean this up later
-        if label == "water":
-            self.deps.annotation_panel.water_btn.configure(**self.deps.annotation_panel.label_btn_active_style)
-            self.deps.annotation_panel.ice_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
-            self.deps.annotation_panel.unknown_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
-        elif label == "ice":
-            self.deps.annotation_panel.ice_btn.configure(**self.deps.annotation_panel.label_btn_active_style)
-            self.deps.annotation_panel.water_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
-            self.deps.annotation_panel.unknown_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
-        elif label == "unknown":
-            self.deps.annotation_panel.unknown_btn.configure(**self.deps.annotation_panel.label_btn_active_style)
-            self.deps.annotation_panel.water_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
-            self.deps.annotation_panel.ice_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
-        
-        self.focus_set()
+        self.annotation_controller.bucket_fill(event, label)
 
     def bucket_fill_polygon_area(self, event):
-        """Perform bucket fill annotation on the selected polygon area based on the active label."""
-        anno = self.app_state.anno
-        if anno.active_label is None:
-            return
-        elif anno.active_label == "water":
-            self.label_water(bucket_fill=True)
-        elif anno.active_label == "ice":
-            self.label_ice(bucket_fill=True)
-        elif anno.active_label == "unknown":
-            self.label_unknown(bucket_fill=True)
+        self.annotation_controller.bucket_fill_polygon_area(event)
 
     def exit_bucket_fill(self, event):
-        """Exit bucket fill mode, reset annotation mode and active label, reset cursor, and update annotation panel button styles."""
-        anno = self.app_state.anno
-        anno.annotation_mode = None
-        anno.active_label = None
-        self.deps.canvas.config(cursor="")
-        self.deps.annotation_panel.water_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
-        self.deps.annotation_panel.ice_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
-        self.deps.annotation_panel.unknown_btn.configure(**self.deps.annotation_panel.label_btn_default_style)
+        self.annotation_controller.exit_bucket_fill(event)
 
     # Change this function name later
     def select_area_local_seg(self):

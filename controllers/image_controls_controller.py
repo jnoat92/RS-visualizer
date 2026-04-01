@@ -7,7 +7,7 @@ selecting channel.
 
 They share the "UI control changed -> update state -> rerender" flow.
 
-Last modified: Mar 2026
+Last modified: Apr 2026
 '''
 
 import customtkinter as ctk
@@ -18,17 +18,15 @@ from core.contrast_handler import enhance_outlier_slider
 # brightness_slider_handle, right_click_brightness_reset, opacity_slider_handle, segmentation_toggle
 
 class ImageControlsController:
-    def __init__(self, deps, display_controller, 
-                 scene_controller):
+    def __init__(self, deps, display_controller):
         self.deps = deps
-        self.display = display_controller
-        self.scene = scene_controller
+        self.display_controller = display_controller
 
     def color_composite(self):
         """
         Handle color composite selection changes, enable/disable HH/HV switch accordingly, and update the displayed image.
         """
-        display = self.app_state.display
+        display = self.deps.app_state.display
         display.channel_mode = self.deps.widgets["mode_var_color_composite"].get()
 
         if display.channel_mode == "(HH/HV)":
@@ -43,8 +41,8 @@ class ImageControlsController:
         """
         Handle color composite changes, update the displayed image based on the selected channel, and reset contrast slider.
         """
-        display = self.app_state.display
-        scene = self.app_state.scene
+        display = self.deps.app_state.display
+        scene = self.deps.app_state.scene
 
         if get_channel:
             display.channel_mode = "HV" if self.deps.widgets["hh_hv_switch"].get() else "HH"
@@ -52,18 +50,18 @@ class ImageControlsController:
         self.deps.widgets["contrast_slider"].set(0)  # Reset contrast slider
         self.contrast_slider_handle(0)
 
-        self.title(f"Scene {scene.scene_name}-{display.channel_mode}")
-        self.choose_image()
+        self.deps.app.title(f"Scene {scene.scene_name}-{display.channel_mode}")
+        self.display_controller.choose_image()
 
-        self.refresh_all()
+        self.display_controller.refresh_all()
 
     # Image handle
     def contrast_slider_handle(self, val):
         """
         Handle contrast slider changes, apply contrast enhancement to the current image based on the selected channel(s), and refresh the display.
         """
-        scene = self.app_state.scene
-        display = self.app_state.display
+        scene = self.deps.app_state.scene
+        display = self.deps.app_state.display
 
         display.contrast = (val/200) * 0.15
 
@@ -96,31 +94,31 @@ class ImageControlsController:
                 s=display.contrast
             )
 
-        self.refresh_all()
+        self.display_controller.refresh_all()
 
     def right_click_contrast_reset(self, event):
         """
         Handle right-click on contrast slider to reset contrast to default, refresh the display.
         """
         self.deps.widgets["contrast_slider"].set(0) # reset to default
-        self.app_state.display.contrast = 0.0
+        self.deps.app_state.display.contrast = 0.0
         self.contrast_slider_handle(0)
-        self.refresh_all()
+        self.display_controller.refresh_all()
 
     def brightness_slider_handle(self,val):
         """
         Handle brightness slider changes, update the displayed image based on the selected channel, and refresh the display.
         """
-        self.app_state.display.brightness = float(val)/100
-        self.refresh_all()
+        self.deps.app_state.display.brightness = float(val)/100
+        self.display_controller.refresh_all()
 
     def right_click_brightness_reset(self, event):
         """
         Handle right-click on brightness slider to reset brightness to default, refresh the display.
         """
         self.deps.widgets["brightness_slider"].set(0) # reset to default
-        self.app_state.display.brightness = 0.0
-        self.refresh_all()
+        self.deps.app_state.display.brightness = 0.0
+        self.display_controller.refresh_all()
 
     # Segmentation handle
 
@@ -128,12 +126,12 @@ class ImageControlsController:
         """
         Handle opacity slider changes, update the overlay opacity, and refresh the display.
         """
-        self.app_state.overlay.alpha = float(val)/100
-        self.set_overlay()
-        self.display_image()
+        self.deps.app_state.overlay.alpha = float(val)/100
+        self.display_controller.set_overlay()
+        self.display_controller.display_image()
 
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
+        if self.deps.app_state.anno.polygon_points_img_coor: 
+            self.deps.app.draw_polygon_on_canvas()
 
         if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
             self.deps.annotation_panel.zoom_window is not None and 
@@ -146,12 +144,12 @@ class ImageControlsController:
         Handle segmentation overlay toggle, update the button appearance based on the state, and refresh the display.
         When 'OFF' just show base image, when 'ON' show overlay
         """
-        overlay_state = self.app_state.overlay
+        overlay_state = self.deps.app_state.overlay
         overlay_state.show_overlay = not overlay_state.show_overlay
         state = "ON" if overlay_state.show_overlay else "OFF"
         self.deps.widgets["segmentation_toggle_btn"].configure(text=state)
 
-        self.display_image()
+        self.display_controller.display_image()
 
         if overlay_state.show_overlay:
             # Restore default appearance
@@ -168,8 +166,8 @@ class ImageControlsController:
                 text_color="white"
             )
 
-        if self.app_state.anno.polygon_points_img_coor: 
-            self.draw_polygon_on_canvas()
+        if self.deps.app_state.anno.polygon_points_img_coor: 
+            self.deps.app.draw_polygon_on_canvas()
 
         if (hasattr(self.deps.annotation_panel, 'zoom_window') and 
             self.deps.annotation_panel.zoom_window is not None and 
