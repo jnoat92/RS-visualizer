@@ -1,7 +1,7 @@
 """
 Utility functions for image processing and visualization.
 
-Last modified: Mar 2026
+Last modified: Apr 2026
 """
 
 from numba import njit, prange, cuda
@@ -259,3 +259,30 @@ def erase_edge_touching_polygons_numba(polygons, background=-1):
             x = pos // cols
             y = pos - x * cols
             polygons[x, y] = background
+
+def decimal_to_dms(decimal_degree, is_latitude=True):
+    """Convert decimal degrees to degrees, minutes, seconds (DMS) format."""
+    try:
+        if not isinstance(decimal_degree, (int, float)):
+            raise ValueError("Coordinate must be a number.")
+
+        # Determine hemisphere
+        if is_latitude:
+            hemisphere = 'N' if decimal_degree >= 0 else 'S'
+        else:
+            hemisphere = 'E' if decimal_degree >= 0 else 'W'
+
+        # Absolute value for calculation
+        abs_val = abs(decimal_degree)
+
+        # Degrees
+        degrees = int(abs_val)
+        # Minutes
+        minutes_full = (abs_val - degrees) * 60
+        minutes = int(minutes_full)
+        # Seconds
+        seconds = (minutes_full - minutes) * 60
+
+        return f"{degrees}°{minutes}'{seconds:.2f}\" {hemisphere}"
+    except Exception as e:
+        return f"Error: {e}"
