@@ -10,7 +10,6 @@ import tkinter as tk
 from tkinter import Canvas, filedialog, messagebox
 import numpy as np
 
-from core.segmentation import get_segment_contours, IRGS, remove_edge_touching_polygons
 from app.state import AppState
 from app.dependencies import AppDeps
 from ui.visualizer_layout import build_visualizer_layout
@@ -20,6 +19,7 @@ from controllers.image_controls_controller import ImageControlsController
 from controllers.annotation_controller import AnnotationController
 from controllers.canvas_events_controller import CanvasEventsController
 from controllers.zoom_controller import ZoomController
+from controllers.local_seg_controller import LocalSegController
 
 class Visualizer(ctk.CTk):
 
@@ -77,7 +77,8 @@ class Visualizer(ctk.CTk):
         self.annotation_controller = AnnotationController(self.deps, self.display_controller)
         self.canvas_events_controller = CanvasEventsController(self.deps, self.display_controller, self.annotation_controller)
         self.zoom_controller = ZoomController(self.deps, self.display_controller, self.annotation_controller)
-        
+        self.local_seg_controller = LocalSegController(self.deps, self.display_controller, self.annotation_controller, self.canvas_events_controller, self.zoom_controller)
+
         #%% INITIAL VISUALIZATION / STATE
         self.reset_annotation()
 
@@ -188,66 +189,7 @@ class Visualizer(ctk.CTk):
         self.zoom_controller.zoom_to_rectangle(x_min, y_min, x_max, y_max)
 
     def run_local_segmentation(self, x_min, y_min, x_max, y_max):
-        """
-        Run local segmentation (IRGS) on the area selected by the user, 
-        update the overlay with the local segmentation results, and refresh the display.
-        """
-        overlay = self.app_state.overlay
-        scene = self.app_state.scene
-
-        overlay.local_segmentation_area = np.stack([scene.raw_img[overlay.local_segmentation_source], 
-                                                    scene.raw_img[overlay.local_segmentation_source]], axis=-1)[y_min:y_max, x_min:x_max]
-
-        overlay.local_segmentation_limits = (x_min, y_min, x_max, y_max)
-        land_nan_mask_crop = scene.land_nan_masks[scene.active_source][y_min:y_max, x_min:x_max]
-        # Disable select local segmentation mode after selection
-        overlay.select_local_segmentation = False
-
-        self.deps.canvas.delete(self.canvas_events_controller.selection_rect_id)
-        self.canvas_events_controller.selection_rect_id = None
-        self.canvas_events_controller.selection_start_coord = None
-
-        # Show loading bar
-        self.deps.loading_bar_label.grid(row=0, column=0)
-        self.deps.loading_bar.grid(row=1, column=0)
-        self.update_idletasks()
-
-        self.deps.loading_bar.set(0)
-        self.deps.loading_bar_label.configure(text="Running local segmentation...")
-        self.update_idletasks()
-
-        # Run IRGS on the selected area
-        irgs_output, boundaries = IRGS(overlay.local_segmentation_area, n_classes=overlay.local_seg_n_classes, n_iter=120, mask=~land_nan_mask_crop)
-
-        self.deps.loading_bar.set(0.4)
-        self.deps.loading_bar_label.configure(text="Clearing border polygons...")
-        self.update_idletasks()
-
-        irgs_output, boundaries = remove_edge_touching_polygons(irgs_output)
-
-        self.deps.loading_bar.set(0.7)
-        self.deps.loading_bar_label.configure(text="Applying segmentation on overlay...")
-        self.update_idletasks()
-
-        overlay.local_segmentation_mask = np.zeros_like(scene.boundmasks[scene.active_source], dtype=np.uint8)
-        overlay.local_segmentation_mask[y_min:y_max, x_min:x_max] = irgs_output
-        overlay.local_segmentation_mask = np.tile(overlay.local_segmentation_mask[:, :, np.newaxis], (1, 1, 3))
-
-        overlay.local_segmentation_bounds = np.zeros_like(scene.boundmasks[scene.active_source], dtype=bool)
-        boundaries_bool = boundaries != 1
-        overlay.local_segmentation_bounds[y_min:y_max, x_min:x_max] = boundaries_bool
-        overlay.show_local_segmentation = True
-
-        self.reset_annotation() # Reset annotation to prevent annotation on old local segmentation
-        self.refresh_view()
-
-        self.deps.loading_bar.set(1)
-        self.deps.loading_bar_label.configure(text="Local segmentation applied")
-        self.update_idletasks()
-
-        self.after(3000, self.deps.loading_bar_label.grid_remove)
-        self.after(3000, self.deps.loading_bar.grid_remove)
-        self.update_idletasks()
+        self.local_seg_controller.run_local_segmentation(x_min, y_min, x_max, y_max)
 
 
 
@@ -474,42 +416,16 @@ class Visualizer(ctk.CTk):
 
     # Change this function name later
     def select_area_local_seg(self):
-        overlay = self.app_state.overlay
-        overlay.select_local_segmentation = True
-        # Using zoom selection for local segmentation area selection
-        self.enable_zoom_selection()
+        self.local_seg_controller.select_area_local_seg()
 
     def toggle_local_seg_source(self):
-        """Toggle the source for local segmentation between HV and HH, and rerun local segmentation if area is already selected."""
-        overlay = self.app_state.overlay
-        if self.deps.annotation_panel.local_seg_switch.get():
-            overlay.local_segmentation_source = "HV"
-        else:
-            overlay.local_segmentation_source = "HH"
-
-        if overlay.local_segmentation_area is not None:
-            x_min, y_min, x_max, y_max = overlay.local_segmentation_limits
-            self.run_local_segmentation(x_min, y_min, x_max, y_max)
+        self.local_seg_controller.toggle_local_seg_source()
 
     def clear_local_seg(self):
-        """Clear local segmentation results, reset related variables, exit local segmentation view, and refresh display."""
-        overlay = self.app_state.overlay
-        if not overlay.show_local_segmentation:
-            return
-        overlay.local_segmentation_area = None
-        overlay.local_segmentation_mask = None
-        overlay.local_segmentation_bounds = None
-        overlay.show_local_segmentation = False
-        self.reset_annotation()
-        self.refresh_view()
+        self.local_seg_controller.clear_local_seg()
 
     def update_local_seg_n_classes(self, value):
-        """Update the number of classes for local segmentation, rerun local segmentation if area is already selected."""
-        overlay = self.app_state.overlay
-        overlay.local_seg_n_classes = int(value)
-        if overlay.local_segmentation_area is not None:
-            x_min, y_min, x_max, y_max = overlay.local_segmentation_limits
-            self.run_local_segmentation(x_min, y_min, x_max, y_max)
+        self.local_seg_controller.update_local_seg_n_classes(value)
 
     # Misc
 
