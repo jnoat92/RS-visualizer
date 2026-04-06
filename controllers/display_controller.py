@@ -25,7 +25,6 @@ class RenderResult:
     draw_x: int
     draw_y: int
 
-# Move set_overlay, choose_image, display_image, and refresh_view
 
 class DisplayController:
     def __init__(self, deps):

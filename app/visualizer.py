@@ -46,7 +46,7 @@ class Visualizer(ctk.CTk):
         #%% Initial state
 
         # Annotation state
-        self.annotation_mode = None  # 'rectangle' or None
+        self.annotation_mode = None 
         self.double_click_flag = False
 
         layout = build_visualizer_layout(self, self.app_state)
@@ -75,12 +75,12 @@ class Visualizer(ctk.CTk):
                                             self.display_controller
                                             )
         self.annotation_controller = AnnotationController(self.deps, self.display_controller)
-        self.canvas_events_controller = CanvasEventsController(self.deps, self.display_controller, self.annotation_controller)
         self.zoom_controller = ZoomController(self.deps, self.display_controller, self.annotation_controller)
+        self.canvas_events_controller = CanvasEventsController(self.deps, self.display_controller, self.annotation_controller, self.zoom_controller)
         self.local_seg_controller = LocalSegController(self.deps, self.display_controller, self.annotation_controller, self.canvas_events_controller, self.zoom_controller)
 
         #%% INITIAL VISUALIZATION / STATE
-        self.reset_annotation()
+        self.annotation_controller.reset_annotation()
 
         display.channel_mode = self.deps.widgets['mode_var_color_composite'].get()
         if display.channel_mode == "(HH/HV)":
@@ -94,7 +94,7 @@ class Visualizer(ctk.CTk):
         )
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.after(500, self.choose_SAR_scene)
+        self.after(500, self.scene_controller.choose_SAR_scene)
 
     # Minimap control
     def _update_minimap_position(self, event=None):
@@ -124,27 +124,8 @@ class Visualizer(ctk.CTk):
                                                                 command=self.choose_lbl_source)
         self.deps.widgets['lbl_source_btn'][lbl_source].grid(row=i+1, column=0, sticky="w", pady=(10, 10))
 
-    def load_pred(self):
-        self.scene_controller.load_pred()
-
-
-    # Display handle
-
-    def set_overlay(self):
-        self.display_controller.set_overlay()
-
     def choose_image(self):
         self.display_controller.choose_image()
-
-    def display_image(self):
-        self.display_controller.display_image()
-    
-    def refresh_view(self):
-        self.display_controller.refresh_view()
-
-    def refresh_all(self):
-        self.display_controller.refresh_all()
-
 
     # Image selection handle
 
@@ -153,7 +134,6 @@ class Visualizer(ctk.CTk):
 
     def color_composite(self):
         self.image_controls_controller.color_composite()
-
         
     def HH_HV(self, get_channel=True):
         self.image_controls_controller.HH_HV(get_channel)
@@ -172,7 +152,6 @@ class Visualizer(ctk.CTk):
         self.image_controls_controller.right_click_brightness_reset(event)
 
     # Segmentation handle
-
     def opacity_slider_handle(self, val):
         self.image_controls_controller.opacity_slider_handle(val)
 
@@ -181,24 +160,24 @@ class Visualizer(ctk.CTk):
 
 
     # Zoom handle
-
     def enable_zoom_selection(self):
         self.zoom_controller.enable_zoom_selection()
 
     def zoom_to_rectangle(self, x_min, y_min, x_max, y_max):
         self.zoom_controller.zoom_to_rectangle(x_min, y_min, x_max, y_max)
 
+    # Local segmentation handle
     def run_local_segmentation(self, x_min, y_min, x_max, y_max):
         self.local_seg_controller.run_local_segmentation(x_min, y_min, x_max, y_max)
 
-
-
+    # Display handle
     def reset_zoom(self):
         self.zoom_controller.reset_zoom()
 
+    def refresh_view(self):
+        self.display_controller.refresh_view()
 
     # Label source handle
-
     def choose_lbl_source(self, plot=True):
         """
         Handle label source selection changes, update the active label source in the app state, 
@@ -220,9 +199,9 @@ class Visualizer(ctk.CTk):
         self.mode_var_lbl_source_prev = key
 
         if plot:
-            self.refresh_view()
+            self.display_controller.refresh_view()
 
-        self.reset_annotation()
+        self.annotation_controller.reset_annotation()
 
         if self.deps.evaluation_window.winfo_viewable():
             self.deps.evaluation_panel.load_existing_evaluation()
@@ -231,18 +210,11 @@ class Visualizer(ctk.CTk):
 
 
     # Canvas Events
-
     def _on_mousewheel(self, event):
         self.canvas_events_controller._on_mousewheel(event)
 
     def _on_left_click_await(self, event):
         self.canvas_events_controller._on_left_click_await(event)
-
-    def choose_click_event(self, event):
-        self.canvas_events_controller.choose_click_event(event)
-
-    def _on_left_click(self, event):
-        self.canvas_events_controller._on_left_click(event)
 
     def _on_left_drag(self, event):
         self.canvas_events_controller._on_left_drag(event)
@@ -256,9 +228,6 @@ class Visualizer(ctk.CTk):
     def _on_double_click_set_flag(self, event):
         self.canvas_events_controller._on_double_click_set_flag(event)
 
-    def _on_double_click(self, event):
-        self.canvas_events_controller._on_double_click(event)
-
     def _on_mouse_move(self, event):
         self.canvas_events_controller._on_mouse_move(event)
 
@@ -268,13 +237,11 @@ class Visualizer(ctk.CTk):
     def _on_ctrl_z(self, event=None):
         self.canvas_events_controller._on_ctrl_z(event)
 
-
     def _on_ctrl_y(self, event=None):
         self.canvas_events_controller._on_ctrl_y(event)
 
 
     # Operations
-    
     def show_evaluation_panel(self):
         """Show evaluation panel, close annotation panel if open"""
         ann_flag = True
@@ -297,7 +264,7 @@ class Visualizer(ctk.CTk):
         if not eva_flag:
             return
         
-        annotation_loaded = self.check_existing_annotation()
+        annotation_loaded = self.annotation_controller.check_existing_annotation()
 
         if annotation_loaded:
             self.deps.annotation_panel.insert_existing_notes(self.app_state.anno.annotation_notes)
@@ -333,13 +300,13 @@ class Visualizer(ctk.CTk):
                 if not self.deps.annotation_panel.save_annotation():
                     return  0   # Failed to save → don't close
 
-        self.reset_annotation()
+        self.annotation_controller.reset_annotation()
         if self.app_state.overlay.show_local_segmentation:
-            self.clear_local_seg()
+            self.local_seg_controller.clear_local_seg()
         self.deps.annotation_panel.unsaved_changes = False
         self.deps.annotation_window.withdraw()
         anno.annotation_mode = None
-        self.exit_bucket_fill(None)
+        self.annotation_controller.exit_bucket_fill(None)
         self.deps.canvas.config(cursor="")
         for btn in self.deps.widgets["lbl_source_btn"].values():
             btn.configure(state=ctk.NORMAL) # Re-enable label source buttons when annotation panel is closed
@@ -347,19 +314,13 @@ class Visualizer(ctk.CTk):
         return 1
 
 
-    # Annotation options
-
+    # Annotation handle
     def draw_rectangle(self):
         self.annotation_controller.draw_rectangle()
-
+    
     def draw_polygon(self):
         self.annotation_controller.draw_polygon()
 
-
-
-    def _add_polygon_point(self, event):
-        self.annotation_controller.add_polygon_point(event)
-    
     def draw_polygon_on_canvas(self):
         self.annotation_controller.draw_polygon_on_canvas()
 
@@ -372,20 +333,17 @@ class Visualizer(ctk.CTk):
     def reset_annotation(self):
         self.annotation_controller.reset_annotation()
 
-
     def annotate_class(self, class_color=[0, 0, 0]):
         self.annotation_controller.annotate_class(class_color)
 
     def undo_redo_annotation(self, last_polygon_area_idx, last_colours, last_window):
         self.annotation_controller.undo_redo_annotation(last_polygon_area_idx, last_colours, last_window)
 
-
     def check_existing_annotation(self):
         return self.annotation_controller.check_existing_annotation()
     
     def toggle_show_anno_on_minimap(self):
         self.annotation_controller.toggle_show_anno_on_minimap()
-
 
     def label_water(self, bucket_fill=False):
         self.annotation_controller.label_water(bucket_fill)
@@ -428,7 +386,6 @@ class Visualizer(ctk.CTk):
         self.local_seg_controller.update_local_seg_n_classes(value)
 
     # Misc
-
     def _set_all_children_enabled(self, parent, enabled=True, exclude=[]):
         state = ctk.NORMAL if enabled else ctk.DISABLED
 

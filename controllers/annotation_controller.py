@@ -15,17 +15,11 @@ from skimage.color import rgb2gray
 from tkinter import messagebox
 from core.utils import generate_boundaries
 
+
 class AnnotationController:
     def __init__(self, deps, display_controller):
         self.deps = deps
         self.display_controller = display_controller
-
-    # Move draw_rectangle, draw_polygon, _add_polygon_point,
-    # draw_polygon_on_canvas, draw_single_polygon_on_canvas,
-    # _finish_polygon, reset_annotation, annotate_class,
-    # undo_redo_annotation, check_existing_annotation,
-    # bucket_fill, bucket_fill_polygon_area, exit_bucket_fill
-    # label-specfic methods
 
     def draw_rectangle(self):
         """Enable rectangle drawing mode."""

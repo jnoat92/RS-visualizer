@@ -56,8 +56,6 @@ def build_visualizer_layout(app, app_state) -> VisualizerLayout:
     app.bind("<Control-y>", app._on_ctrl_y)
     app.bind("<Control-Shift-Z>", app._on_ctrl_y)  # Some systems use Ctrl+Shift+Z for redo
 
-    double_click_flag = False
-
 
     # ==================== CONTROL PANELS (STACKED VERTICALLY)
 

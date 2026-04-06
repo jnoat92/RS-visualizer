@@ -13,13 +13,15 @@ from tkinter import messagebox
 from core.segmentation import get_segment_contours
 from core.utils import ds_to_src_pixel, decimal_to_dms
 
+
 class CanvasEventsController:
     '''Controller for handling canvas events such as mouse clicks and movements.'''
     def __init__(self, deps, display_controller, 
-                 annotation_controller):
+                 annotation_controller, zoom_controller):
         self.deps = deps
         self.display_controller = display_controller
         self.annotation_controller = annotation_controller
+        self.zoom_controller = zoom_controller
         self.double_click_flag = False
         self.selection_start_coord = None
         self.selection_rect_id = None
@@ -187,7 +189,7 @@ class CanvasEventsController:
             if img_x_max < 0 or img_y_max < 0 or img_x_min < 0 or img_y_min < 0:
                 return  # invalid selection
 
-            self.deps.app.zoom_to_rectangle(img_x_min, img_y_min, img_x_max, img_y_max)
+            self.zoom_controller.zoom_to_rectangle(img_x_min, img_y_min, img_x_max, img_y_max)
 
         elif overlay.select_local_segmentation and self.selection_start_coord:
             # Complete selection and zoom

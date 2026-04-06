@@ -14,8 +14,6 @@ import customtkinter as ctk
 from core.render import layer_imagery
 from core.contrast_handler import enhance_outlier_slider
 
-# Move color_composite, HH_HV, contrast_slider_handle, right_click_contrast_rest
-# brightness_slider_handle, right_click_brightness_reset, opacity_slider_handle, segmentation_toggle
 
 class ImageControlsController:
     def __init__(self, deps, display_controller):

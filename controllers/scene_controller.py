@@ -23,8 +23,6 @@ from core.io import (
 from core.render import layer_imagery
 from core.utils import tiepoints_1d_to_grid, make_pix2ll
 
-# Move choose_SAR_scene, load_pred for sure
-# Potentially also move update_label_source_widgets and choose_lbl_source
 
 class SceneController:
     def __init__(self, deps):
