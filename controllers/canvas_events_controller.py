@@ -91,7 +91,7 @@ class CanvasEventsController:
                 self.selection_start_coord = (event.x, event.y)
                 anno.selected_polygon = self.deps.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='yellow', width=2)
         elif anno.annotation_mode == 'polygon':
-                self._add_polygon_point(event)
+                self.annotation_controller.add_polygon_point(event)
         elif anno.annotation_mode == 'bucket_fill':
             x = round(np.float64((event.x - view.offset_x) / view.zoom_factor))
             y = round(np.float64((event.y - view.offset_y) / view.zoom_factor))
