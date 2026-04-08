@@ -157,7 +157,7 @@ custom_annotation.png - coloured mask composed of polygons drawn by the user
 
 annotation_notes.json - consists of scene_id, timestamp, and notes
 
-annotated_area.npz - numpy array consisting of pixel coordinates of annotated areas (for minimap use)
+changed_area.png - black and white mask of changes made by user (for review purposes)
 
 Example (annotation_notes structure):
 ```json
@@ -203,8 +203,17 @@ The generated executable will be placed in:
 
 ```
 ├───app
+│   ├───dependencies.py
 │   ├───state.py
 │   └───visualizer.py
+├───controllers
+│   ├───annotation_controller.py
+│   ├───canvas_events_controller.py
+│   ├───display_controller.py
+│   ├───image_controls_controller.py
+│   ├───local_seg_controller.py
+│   ├───scene_controller.py
+│   └───zoom_controller.py
 ├───core
 │   ├───contrast_handler.py
 │   ├───io.py
@@ -215,7 +224,9 @@ The generated executable will be placed in:
 │   └───utils.py
 ├───icons
 │   ├───polygon.png
-│   └───rectangle.png
+│   ├───rectangle.png
+│   ├───redo.png
+│   └───undo.png
 ├───landmask
 │   ├───StatCan_ocean.dbf
 │   ├───StatCan_ocean.prj
@@ -232,7 +243,8 @@ The generated executable will be placed in:
 ├───ui
 │   ├───annotation.py
 │   ├───evaluation.py
-│   └───minimap.py
+│   ├───minimap.py
+│   └───visualizer_layout.py
 ├───ArcticScope_User_Manual.pdf
 ├───create_executable.bat
 ├───main.py
@@ -255,4 +267,4 @@ Application Feels Slow
 - Zoom in on a smaller area
 - Close other applications if system memory is limited.
 
-Last modified: Feb 18, 2026
+Last modified: Apr 8, 2026
