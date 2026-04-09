@@ -82,9 +82,9 @@ class AnnotationPanel(ctk.CTkFrame):
         ctk.CTkButton(self.labels_frame, text="reset from", 
                       width=20, command=self.reset_label_from).grid(row=1, column=4, padx=5, pady=5)
         ctk.CTkButton(self.labels_frame, text="", width=15, image=ctk.CTkImage(Image.open(resource_path("icons/undo.png")), size=(15, 15)),
-                      command=command_parent.on_ctrl_z).grid(row=2, column=0, padx=5, pady=5, columnspan=3, sticky='e')
+                      command=command_parent._on_ctrl_z).grid(row=2, column=0, padx=5, pady=5, columnspan=3, sticky='e')
         ctk.CTkButton(self.labels_frame, text="", width=15, image=ctk.CTkImage(Image.open(resource_path("icons/redo.png")), size=(15, 15)),
-                      command=command_parent.on_ctrl_y).grid(row=2, column=3, padx=5, pady=5, columnspan=2, sticky='w')
+                      command=command_parent._on_ctrl_y).grid(row=2, column=3, padx=5, pady=5, columnspan=2, sticky='w')
 
 
         # Local segmentation frame
@@ -295,8 +295,8 @@ class AnnotationPanel(ctk.CTkFrame):
                 anno.undo_stack.pop(0)  # Remove oldest entry if stack limit exceeded
             anno.undo_stack.append((anno.selected_polygon_area_idx, scene.predictions[scene.active_source][anno.selected_polygon_area_idx].copy(), anno.selected_polygon_window))
             
-            self.command_parent.mode_var_lbl_source.set("Custom_Annotation")
-            main_key = self.command_parent.mode_var_lbl_source.get()
+            self.command_parent.deps.widgets["mode_var_lbl_source"].set("Custom_Annotation")
+            main_key = self.command_parent.deps.widgets["mode_var_lbl_source"].get()
             # if main_key != "Custom_Annotation":
             #     messagebox.showinfo("Error", "Only 'Custom Annotation' segmentation source can be reset.", parent=self.zoom_window)
             #     return
@@ -324,11 +324,11 @@ class AnnotationPanel(ctk.CTkFrame):
             # Close the zoom window
             self.zoom_window.destroy()
 
-            self.command_parent.lbl_source_btn[main_key].configure(text=f"* {main_key}")
+            self.command_parent.deps.widgets["lbl_source_btn"][main_key].configure(text=f"* {main_key}")
             self.unsaved_changes = True
             #self.save_button.configure(state=ctk.NORMAL)
             changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.command_parent.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.command_parent.deps.minimap.show_changed_area(scene.img, changed_area_mask)
         else:
             # Whole area reset
             if not messagebox.askyesnocancel("Reset whole annotation", "Please note you are about to reset the entire annotation.\n" \
@@ -343,10 +343,10 @@ class AnnotationPanel(ctk.CTkFrame):
             # Close the zoom window
             self.zoom_window.destroy()
 
-            self.command_parent.lbl_source_btn[scene.active_source].configure(text=f"* {scene.active_source}")
+            self.command_parent.deps.widgets["lbl_source_btn"][scene.active_source].configure(text=f"* {scene.active_source}")
             self.unsaved_changes = True
             #self.save_button.configure(state=ctk.NORMAL)
-            self.command_parent.minimap.set_image(scene.img)
+            self.command_parent.deps.minimap.set_image(scene.img)
         
         anno.redo_stack.clear()
 
@@ -410,7 +410,7 @@ class AnnotationPanel(ctk.CTkFrame):
         Image.fromarray(changed_area_mask).save(annotated_area_file_path)
 
         # mark as saved
-        self.command_parent.lbl_source_btn[key].configure(text=key)
+        self.command_parent.deps.widgets["lbl_source_btn"][key].configure(text=key)
         self.unsaved_changes = False
         #self.save_button.configure(state=ctk.DISABLED)
 

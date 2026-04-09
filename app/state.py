@@ -1,7 +1,7 @@
 '''
 Data classes for application state management
 
-Last modified: Mar 2026
+Last modified: Apr 2026
 '''
 
 import numpy as np
@@ -40,8 +40,13 @@ class SceneState:
     raw_img: dict[str, np.ndarray] = field(default_factory=dict)
     orig_img: dict[str, np.ndarray] = field(default_factory=dict)
 
+    # Store color composites
+    color_composites: dict[str, np.ndarray] = field(default_factory=dict)
+
     # Target spacing for RCM data (e.g., 200m or 100m)
     target_spacing: int = 100
+
+    pix2ll: object = None # Function to convert pixel coordinates to lat/lon, created from tie points if available
 
     # Store histogram data for contrast enhancement
     contrast_img: dict[str, np.ndarray] = field(default_factory=dict)
@@ -120,6 +125,7 @@ class AnnotationState:
     polygon_points_img_coor: list[tuple[int, int]] = field(default_factory=list)
 
     # Select created polygon
+    selected_polygon: object = None
     selected_polygon_window: tuple[int, int, int, int] = None
     selected_polygon_area_idx: int = None
     multiple_polygons: bool = False
