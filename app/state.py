@@ -45,6 +45,8 @@ class SceneState:
 
     # Target spacing for RCM data (e.g., 200m or 100m)
     target_spacing: int = 100
+    normalization_method: str = "min-max" # Method for normalizing images for display
+    model_path: str = "" # Path to model for predictions
 
     pix2ll: object = None # Function to convert pixel coordinates to lat/lon, created from tie points if available
 

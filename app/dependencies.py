@@ -13,6 +13,8 @@ class AppDeps:
     minimap_window_id: int
     status_bar: object
 
+    setup_window: object
+
     annotation_panel: object
     evaluation_panel: object
     annotation_window: object
@@ -22,4 +24,3 @@ class AppDeps:
     loading_bar_label: ctk.CTkLabel
 
     widgets: dict
-    

@@ -551,7 +551,7 @@ def build_land_masks(rcm_200m_data):
 
     return land_mask
 
-def normalize_and_prepare_images(rcm_200m_data):
+def normalize_and_prepare_images(rcm_200m_data, normalization_method="min-max"):
     hh = rcm_200m_data["hh"]
     hv = rcm_200m_data["hv"]
 
@@ -560,33 +560,60 @@ def normalize_and_prepare_images(rcm_200m_data):
                   "dst_crs": rcm_200m_data["src_crs"],
                   "transformer": rcm_200m_data["transformer"]}
 
-    # Normalize HH band to uint8 for visualization
     nan_mask_hh = np.isnan(hh)
-    min_ = hh[~nan_mask_hh].min(0)
-    max_ = hh[~nan_mask_hh].max(0)
-    hh_u8 = np.zeros_like(hh, dtype=np.uint8)
-
-    if max_ > min_:
-        hh_u8[~nan_mask_hh] = np.clip(
-            255 * (hh[~nan_mask_hh] - min_) / (max_ - min_),
-            0, 255
-        ).astype(np.uint8)
-
-    hh = hh_u8
-
-    # Normalize HV band to uint8 for visualization
     nan_mask_hv = np.isnan(hv)
-    min_ = hv[~nan_mask_hv].min(0)
-    max_ = hv[~nan_mask_hv].max(0)
-    hv_u8 = np.zeros_like(hv, dtype=np.uint8)
 
-    if max_ > min_:
-        hv_u8[~nan_mask_hv] = np.clip(
-            255 * (hv[~nan_mask_hv] - min_) / (max_ - min_),
+    if normalization_method == "min-max":
+        # Min/Max normalization
+        # Normalize HH band to uint8 for visualization
+        min_ = hh[~nan_mask_hh].min(0)
+        max_ = hh[~nan_mask_hh].max(0)
+        hh_u8 = np.zeros_like(hh, dtype=np.uint8)
+
+        if max_ > min_:
+            hh_u8[~nan_mask_hh] = np.clip(
+                255 * (hh[~nan_mask_hh] - min_) / (max_ - min_),
+                0, 255
+            ).astype(np.uint8)
+
+        hh = hh_u8
+
+        # Normalize HV band to uint8 for visualization
+        min_ = hv[~nan_mask_hv].min(0)
+        max_ = hv[~nan_mask_hv].max(0)
+        hv_u8 = np.zeros_like(hv, dtype=np.uint8)
+
+        if max_ > min_:
+            hv_u8[~nan_mask_hv] = np.clip(
+                255 * (hv[~nan_mask_hv] - min_) / (max_ - min_),
+                0, 255
+            ).astype(np.uint8)
+
+        hv = hv_u8
+
+    elif normalization_method == "mean-std":
+        # Mean/Std normalization
+        hh_mean = np.nanmean(hh)
+        hh_std = np.nanstd(hh)
+        hh_u8 = np.zeros_like(hh, dtype=np.uint8)
+
+        hh_u8[~nan_mask_hh] = np.clip(
+            255 * (hh[~nan_mask_hh] - hh_mean) / hh_std,
             0, 255
         ).astype(np.uint8)
 
-    hv = hv_u8
+        hh = hh_u8
+
+        hv_mean = np.nanmean(hv)
+        hv_std = np.nanstd(hv)
+        hv_u8 = np.zeros_like(hv, dtype=np.uint8)
+
+        hv_u8[~nan_mask_hv] = np.clip(
+            255 * (hv[~nan_mask_hv] - hv_mean) / hv_std,
+            0, 255
+        ).astype(np.uint8)
+
+        hv = hv_u8
 
     raw_img, img_base, hist, n_valid, nan_mask = setup_base_images(hh, hv, nan_mask_hh, nan_mask_hv)
     

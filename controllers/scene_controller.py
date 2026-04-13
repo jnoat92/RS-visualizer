@@ -96,7 +96,7 @@ class SceneController:
             self.deps.app.update_idletasks()  
 
             # Normalize and prepare images
-            raw_img, orig_img, hist, n_valid, nan_mask, geo_coord_helpers = normalize_and_prepare_images(rcm_scaled_data)
+            raw_img, orig_img, hist, n_valid, nan_mask, geo_coord_helpers = normalize_and_prepare_images(rcm_scaled_data, scene.normalization_method)
 
             # Save raw images to app state for later use (e.g., layering)
             scene.raw_img = raw_img
@@ -189,15 +189,19 @@ class SceneController:
         scene.land_nan_masks = {}
         scene.boundmasks = {}
 
-        model_paths = []
-        model_folder = resource_path("model")
+        if scene.model_path is None or not os.path.isfile(scene.model_path):
+            model_paths = []
+            model_folder = resource_path("model")
 
-        for file in os.listdir(model_folder):
-            if file.endswith(".pt"):
-                 model_paths.append(file)
+            for file in os.listdir(model_folder):
+                if file.endswith(".pt"):
+                    model_paths.append(file)
 
-        model_path = model_paths[0] if model_paths else None
-        model_path = os.path.join(model_folder, model_path) if model_path else None
+            model_path = model_paths[0] if model_paths else None
+            model_path = os.path.join(model_folder, model_path) if model_path else None
+        else:
+            model_path = scene.model_path
+        
         variables = run_pred_model(scene.lbl_sources[0], scene.rcm_200m_data, scene.base_land_mask, 
                                                                   model_path=model_path, 
                                                                   target_width = scene.rcm_scaled_data["dst_width"],
@@ -240,3 +244,23 @@ class SceneController:
                 self.deps.widgets['mode_var_lbl_source'].set(custom_anno)
 
             self.deps.app.choose_image() # Refresh image to show annotation on minimap
+
+    def set_resolution_level(self, level):
+        """
+        Set the resolution level for display. Save in app state.
+        """
+        resolution = int(level.split("m")[0])
+        self.deps.app_state.scene.target_spacing = resolution
+
+    def set_normalization_method(self, method):
+        """
+        Set the normalization method for display. Save in app state.
+        """
+        self.deps.app_state.scene.normalization_method = method.lower()
+
+    def set_model_file(self, model_path):
+        """
+        Set the model file for prediction. Save in app state.
+        """
+        self.deps.app_state.scene.model_path = model_path
+        

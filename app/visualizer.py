@@ -13,6 +13,7 @@ import numpy as np
 from app.state import AppState
 from app.dependencies import AppDeps
 from ui.visualizer_layout import build_visualizer_layout
+from ui.setup_window import SetupWindow
 from controllers.scene_controller import SceneController
 from controllers.display_controller import DisplayController
 from controllers.image_controls_controller import ImageControlsController
@@ -59,6 +60,7 @@ class Visualizer(ctk.CTk):
             minimap=layout.minimap,
             minimap_window_id=layout.minimap_window_id,
             status_bar=layout.status_bar,
+            setup_window=None, # Placeholder, will be set after SetupWindow is created
             annotation_panel=layout.annotation_panel,
             evaluation_panel=layout.evaluation_panel,
             annotation_window=layout.annotation_window,
@@ -79,6 +81,10 @@ class Visualizer(ctk.CTk):
         self.canvas_events_controller = CanvasEventsController(self.deps, self.display_controller, self.annotation_controller, self.zoom_controller)
         self.local_seg_controller = LocalSegController(self.deps, self.display_controller, self.annotation_controller, self.canvas_events_controller, self.zoom_controller)
 
+        self.deps.setup_window = SetupWindow(self.deps, self.scene_controller)
+        # Set settings button command after SetupWindow is created
+        self.deps.widgets['settings_btn'].configure(command=self.deps.setup_window.open)
+
         #%% INITIAL VISUALIZATION / STATE
         self.annotation_controller.reset_annotation()
 
@@ -90,11 +96,13 @@ class Visualizer(ctk.CTk):
         self._set_all_children_enabled(
             self.deps.sidebar,
             False,
-            exclude=[self.deps.widgets['choose_SAR_scene_toggle_btn']]
+            exclude=[self.deps.widgets['choose_SAR_scene_toggle_btn'],
+                     self.deps.widgets['settings_btn']]
         )
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.after(500, self.scene_controller.choose_SAR_scene)
+        self.deps.setup_window.open()  # Show setup window on launch
+        # self.after(500, self.scene_controller.choose_SAR_scene)
 
     # Minimap control
     def _update_minimap_position(self, event=None):
