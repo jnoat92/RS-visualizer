@@ -48,7 +48,7 @@ def PredictionLoader(iterator, resize=False, img_shape=None):
     pred[(pred == [0, 0, 128]).all(axis=2)] = [0, 255, 255]
     pred[(pred == [128, 0, 0]).all(axis=2)] = [255, 130, 0]
 
-    if resize:
+    if resize and img_shape != pred.shape[:2]:
         pred = cv2.resize(pred, (img_shape[1], img_shape[0]), interpolation=cv2.INTER_NEAREST)
         pred = np.ascontiguousarray(pred)
 
@@ -103,7 +103,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 # Future combine with loading evaluation?
-def load_existing_annotation(scene_name):
+def load_existing_annotation(scene_name, shape=None):
     folder_name = "Custom_Annotation"
     folder_path = os.path.join(folder_name, scene_name)
     file_path = folder_path + "/custom_annotation.png"
@@ -112,7 +112,10 @@ def load_existing_annotation(scene_name):
     if os.path.exists(folder_path) and os.path.exists(file_path):
         #print(folder_path)
         annotation_file = os.path.join(folder_path, "custom_annotation.png")
-        custom_anno_variable = PredictionLoader(("Custom_Annotation", annotation_file))
+        if shape is not None:
+            custom_anno_variable = PredictionLoader(("Custom_Annotation", annotation_file), resize=True, img_shape=shape)
+        else:
+            custom_anno_variable = PredictionLoader(("Custom_Annotation", annotation_file), resize=False)
         if os.path.exists(notes_file_path):
             with open(notes_file_path, 'r') as f:
                 try:

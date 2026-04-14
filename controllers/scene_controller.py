@@ -39,6 +39,7 @@ class SceneController:
 
         self.deps.app.close_evaluation_panel()
         self.deps.app.close_annotation_panel()
+        self.deps.setup_window.close()  # Close setup window if open
         
         prev_folder_path = scene.folder_path
 
@@ -208,7 +209,7 @@ class SceneController:
                                                                   target_height = scene.rcm_scaled_data["dst_height"],
                                                                   target_spacing=scene.target_spacing, device='cpu')
         
-        existing_anno, anno.annotation_notes = load_existing_annotation(scene.scene_name)
+        existing_anno, anno.annotation_notes = load_existing_annotation(scene.scene_name, shape=(scene.rcm_scaled_data["dst_height"], scene.rcm_scaled_data["dst_width"]))
 
         if existing_anno is not None:
             variables.append(existing_anno)

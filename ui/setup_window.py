@@ -18,6 +18,7 @@ class SetupWindow():
         self.deps = deps
         self.scene_controller = scene_controller
         self.window = None
+        self.dropdown_colour = "#8B8B8B"
 
     def open(self):
         if self.window is not None:
@@ -28,33 +29,40 @@ class SetupWindow():
         self.window.geometry("400x300")
 
         resolution_label = ctk.CTkLabel(self.window, text="Select Resolution Level:")
-        resolution_label.pack(pady=10)
+        resolution_label.pack(pady=5)
         default_resolution = ctk.StringVar(value=f"{self.deps.app_state.scene.target_spacing}m")
         resolution_dropdown = ctk.CTkOptionMenu(self.window, 
                                             values=["40m", "100m", "200m"],
-                                            variable=default_resolution, 
+                                            variable=default_resolution,
+                                            fg_color=self.dropdown_colour, 
+                                            button_color=self.dropdown_colour,
                                             command=self.scene_controller.set_resolution_level)
-        resolution_dropdown.pack(pady=10)
+        resolution_dropdown.pack(pady=5)
 
-        normalization_label = ctk.CTkLabel(self.window, text="Select Normalization Method:")
-        normalization_label.pack(pady=10)
+        normalization_label = ctk.CTkLabel(self.window, text="Select Normalization Method for Visualization:")
+        normalization_label.pack(pady=5)
         default_normalization = ctk.StringVar(value=self.deps.app_state.scene.normalization_method)
         normalization_dropdown = ctk.CTkOptionMenu(self.window, 
                                             values=["mean-std", "min-max"], 
                                             variable=default_normalization,
+                                            fg_color=self.dropdown_colour,
+                                            button_color=self.dropdown_colour,
                                             command=self.scene_controller.set_normalization_method)
-        normalization_dropdown.pack(pady=10)
+        normalization_dropdown.pack(pady=5)
 
-        model_label = ctk.CTkLabel(self.window, text="Select Model for Predictions:")
-        model_label.pack(pady=10)
-        model_file_btn = ctk.CTkButton(self.window, text="Choose Model File", command=self.choose_model_file)
-        model_file_btn.pack(pady=10)
+        model_label = ctk.CTkLabel(self.window, text="Select Project Files:")
+        model_label.pack(pady=5)
+        model_file_btn = ctk.CTkButton(self.window, 
+                                       text="Choose Model File",
+                                       fg_color=self.dropdown_colour, 
+                                       command=self.choose_model_file)
+        model_file_btn.pack(pady=5)
 
         # Example: Button to select image source
         select_image_btn = ctk.CTkButton(self.window, 
-                                         text="Select Image Source", 
+                                         text="Select Image Source and Run", 
                                          command=self.scene_controller.choose_SAR_scene)
-        select_image_btn.pack(pady=20)
+        select_image_btn.pack(pady=5)
 
         # Bring this window to the front
         self.window.grab_set()
