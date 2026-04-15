@@ -13,6 +13,7 @@ import cv2
 import customtkinter as ctk
 from skimage.color import rgb2gray
 from tkinter import messagebox
+from core.render import layer_imagery
 from core.utils import generate_boundaries
 
 
@@ -283,13 +284,28 @@ class AnnotationController:
         if the switch is on, or resetting to the original image if the switch is off.
         """
         scene = self.deps.app_state.scene
+        display = self.deps.app_state.display
         custom_anno = "Custom_Annotation"
+        img = scene.img
+
+        # Check if contrast or brightness is applied, if so go back to 
+        # the original image for minimap display to avoid confusion with 
+        # contrast/brightness changes
+        if display.contrast != 0.0 or display.brightness != 0.0:
+            if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
+                img = layer_imagery(
+                    scene.orig_img["HH"],
+                    scene.orig_img["HV"],
+                    display.channel_mode
+                )
+            else:
+                img = scene.orig_img[display.channel_mode]
 
         if custom_anno in scene.lbl_sources and self.deps.widgets["show_prev_anno_switch"].get():
             changed_area_mask = scene.predictions[custom_anno][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.deps.minimap.show_changed_area(img, changed_area_mask)
         else:
-            self.deps.minimap.set_image(scene.img)
+            self.deps.minimap.set_image(img)
 
 
     def label_water(self, bucket_fill=False):
