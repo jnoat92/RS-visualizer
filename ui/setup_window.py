@@ -39,7 +39,7 @@ class SetupWindow():
                                             command=self.scene_controller.set_resolution_level)
         resolution_dropdown.pack(pady=5)
 
-        normalization_label = ctk.CTkLabel(self.window, text="Select Normalization Method for Visualization:")
+        normalization_label = ctk.CTkLabel(self.window, text="Select Normalization Method for Visualization (Only min-max currently supported):")
         normalization_label.pack(pady=5)
         default_normalization = ctk.StringVar(value=self.deps.app_state.scene.normalization_method)
         normalization_dropdown = ctk.CTkOptionMenu(self.window, 
