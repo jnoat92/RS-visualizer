@@ -27,6 +27,10 @@ class ZoomController:
         if not overlay.select_local_segmentation: # If not in local segmentation mode perform zoom selection
             view.zoom_select_mode = True
             self.deps.widgets["zoom_select_btn"].configure(**self.deps.widgets["zoom_btn_active_style"])
+        else: # If in local segmentation mode, disable zoom selection
+            # This will prevent conflict when user tries to select local segmentation but zoom selection is enabled
+            view.zoom_select_mode = False
+            self.deps.widgets["zoom_select_btn"].configure(**self.deps.widgets["zoom_btn_default_style"])
         self.deps.canvas.config(cursor="crosshair")
 
     def zoom_to_rectangle(self, x_min, y_min, x_max, y_max):
