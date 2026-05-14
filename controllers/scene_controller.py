@@ -81,7 +81,7 @@ class SceneController:
             self.deps.app.update_idletasks()      
 
             # Scale image
-            rcm_200m_data, rcm_scaled_data = scale_hh_hv(rcm_data, target_spacing=scene.target_spacing)
+            rcm_200m_data, rcm_scaled_data = scale_hh_hv(rcm_data, target_spacing_m=scene.target_spacing)
 
             self.deps.loading_bar.set(0.35) # Update loading bar after loading images
             self.deps.loading_bar_label.configure(text="Building land mask...")
