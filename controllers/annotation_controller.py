@@ -11,16 +11,15 @@ Last modified: Apr 2026
 import numpy as np
 import cv2
 import customtkinter as ctk
-from skimage.color import rgb2gray
 from tkinter import messagebox
 from core.render import layer_imagery
-from core.utils import generate_boundaries
 
 
 class AnnotationController:
-    def __init__(self, deps, display_controller):
+    def __init__(self, deps, display_controller, annotation_viewmodel):
         self.deps = deps
         self.display_controller = display_controller
+        self.annotation_viewmodel = annotation_viewmodel
 
     def draw_rectangle(self):
         """Enable rectangle drawing mode."""
@@ -175,20 +174,14 @@ class AnnotationController:
             return
         
         # Check if this area is already annotated with the selected class.
-        if (scene.predictions[scene.active_source][anno.selected_polygon_area_idx] == class_color).all():
+        if self.annotation_viewmodel.selected_area_matches_color(class_color):
             return
         
         key = "Custom_Annotation"
 
-        scene.predictions[key] = scene.predictions[scene.active_source].copy()
-        scene.land_nan_masks[key] = scene.land_nan_masks[scene.active_source].copy()
-        scene.boundmasks[key] = scene.boundmasks[scene.active_source].copy()
-        scene.active_source = key
-
         if key not in self.deps.widgets["lbl_source_btn"].keys():
+            self.annotation_viewmodel.ensure_custom_annotation_source()
             # Add custom annotation as and additional label source
-            scene.lbl_sources.append(key)
-            scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], scene.scene_name, "custom_annotation.png"))
             self.deps.widgets["lbl_source_btn"][key] = ctk.CTkRadioButton(self.deps.widgets["lbl_source_frame"], 
                                                                 text=f"* {key}", 
                                                                 variable=self.deps.widgets["mode_var_lbl_source"], 
@@ -201,29 +194,13 @@ class AnnotationController:
         self.deps.annotation_panel.unsaved_changes = True
         self.deps.annotation_panel.save_button.configure(state=ctk.NORMAL)
 
-        # Store in undo stack and clear redo stack
-        if anno.undo_stack and len(anno.undo_stack) > anno.stack_limit:
-            anno.undo_stack.pop(0)  # Remove oldest entry if stack limit exceeded
-        anno.undo_stack.append((anno.selected_polygon_area_idx, scene.predictions[scene.active_source][anno.selected_polygon_area_idx].copy(), anno.selected_polygon_window))
-        anno.redo_stack.clear() # Clear redo stack after new annotation
-
         self.deps.widgets["mode_var_lbl_source"].set(key)   # set custom annotation as current label source
-        scene.predictions[scene.active_source][anno.selected_polygon_area_idx] = class_color
-        scene.predictions[scene.active_source][scene.land_nan_masks[scene.active_source]] = [255, 255, 255]
+        self.annotation_viewmodel.apply_class_to_selection(class_color)
 
         # Do a vectorized compare of the existing prediction (only 1 so [0]) with the new prediction to get a mask of the changed area
         if self.deps.widgets["show_prev_anno_switch"].get():
-            changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
+            changed_area_mask = self.annotation_viewmodel.changed_area_mask()
             self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
-
-        img_y_min, img_y_max, img_x_min, img_x_max = anno.selected_polygon_window
-        img_y_min = max(0, img_y_min-20)
-        img_y_max = min(scene.predictions[scene.active_source].shape[0], img_y_max+20)
-        img_x_min = max(0, img_x_min-20)
-        img_x_max = min(scene.predictions[scene.active_source].shape[1], img_x_max+20)
-        scene.boundmasks[scene.active_source][img_y_min: img_y_max, 
-                    img_x_min: img_x_max] = generate_boundaries(rgb2gray(scene.predictions[scene.active_source][img_y_min: img_y_max, 
-                                                                                    img_x_min: img_x_max]))
 
         self.display_controller.refresh_view()
         if anno.polygon_points_img_coor: 
@@ -232,22 +209,10 @@ class AnnotationController:
     def undo_redo_annotation(self, last_polygon_area_idx, last_colours, last_window):
         """Undo or redo an annotation by restoring the previous state."""
         scene = self.deps.app_state.scene
-
-        # Change colours in the polygon area back to the last colours
-        scene.predictions[scene.active_source][last_polygon_area_idx] = last_colours
-
-        # Find new boundaries in the affected area
-        img_y_min, img_y_max, img_x_min, img_x_max = last_window
-        img_y_min = max(0, img_y_min-20)
-        img_y_max = min(scene.predictions[scene.active_source].shape[0], img_y_max+20)
-        img_x_min = max(0, img_x_min-20)
-        img_x_max = min(scene.predictions[scene.active_source].shape[1], img_x_max+20)
-        scene.boundmasks[scene.active_source][img_y_min: img_y_max, 
-                    img_x_min: img_x_max] = generate_boundaries(rgb2gray(scene.predictions[scene.active_source][img_y_min: img_y_max, 
-                                                                                    img_x_min: img_x_max]))
+        self.annotation_viewmodel.undo_redo_annotation(last_polygon_area_idx, last_colours, last_window)
         # Show annotated area on minimap
         if self.deps.widgets["show_prev_anno_switch"].get():
-            changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
+            changed_area_mask = self.annotation_viewmodel.changed_area_mask()
             self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
 
         # Reset annotation and refresh view

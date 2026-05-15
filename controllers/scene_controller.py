@@ -11,22 +11,16 @@ import os
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 
-from core.io import (
-    load_existing_annotation,
-    load_rcm_product,
-    run_pred_model,
-    scale_hh_hv,
-    build_land_masks,
-    normalize_and_prepare_images,
-    resource_path,
-)
-from core.render import layer_imagery
-from core.utils import tiepoints_1d_to_grid, make_pix2ll
-
 
 class SceneController:
-    def __init__(self, deps):
+    def __init__(self, deps, scene_viewmodel):
         self.deps = deps
+        self.scene_viewmodel = scene_viewmodel
+
+    def _set_progress(self, value, text):
+        self.deps.loading_bar.set(value)
+        self.deps.loading_bar_label.configure(text=text)
+        self.deps.app.update_idletasks()
 
     def choose_SAR_scene(self):
         """
@@ -53,7 +47,7 @@ class SceneController:
             if scene.folder_path == prev_folder_path:
                 return
 
-            scene.scene_name = scene.folder_path.split('/')[-1]
+            scene.scene_name = os.path.basename(os.path.normpath(scene.folder_path))
 
             self.deps.app.title(f"Scene {scene.scene_name}-{display.channel_mode}")
 
@@ -62,88 +56,18 @@ class SceneController:
             self.deps.loading_bar.grid(row=1, column=0)
             self.deps.app.update_idletasks()
 
-            self.deps.loading_bar.set(0) # Update loading bar after loading images
-            self.deps.loading_bar_label.configure(text="Loading images...")
-            self.deps.app.update_idletasks() # Force UI update to show loading bar progress
+            self._set_progress(0, "Loading images...")
 
             try:
-                rcm_data = load_rcm_product(scene.folder_path)
+                self.scene_viewmodel.load_scene(scene.folder_path, progress=self._set_progress)
             except (FileNotFoundError, ValueError) as e:
                 messagebox.showinfo("Error", f"The selected directory does not contain the required files. Please, select a valid directory.\n\n{e}", parent=self.deps.app.master)
                 scene.folder_path = ''
-                self.deps.loading_bar.set(0) # Update loading bar after loading images
-                self.deps.loading_bar_label.configure(text="Error loading images")
-                self.deps.app.update_idletasks()
+                self._set_progress(0, "Error loading images")
                 return
-
-            self.deps.loading_bar.set(0.2) # Update loading bar after loading images
-            self.deps.loading_bar_label.configure(text="Scaling images...")
-            self.deps.app.update_idletasks()      
-
-            # Scale image
-            rcm_200m_data, rcm_scaled_data = scale_hh_hv(rcm_data, target_spacing_m=scene.target_spacing)
-
-            self.deps.loading_bar.set(0.35) # Update loading bar after loading images
-            self.deps.loading_bar_label.configure(text="Building land mask...")
-            self.deps.app.update_idletasks()
-
-            # Build land masks
-            land_mask = build_land_masks(rcm_scaled_data)
-
-
-            self.deps.loading_bar.set(0.5) # Update loading bar after loading images
-            self.deps.loading_bar_label.configure(text="Normalizing data...")
-            self.deps.app.update_idletasks()  
-
-            # Normalize and prepare images
-            raw_img, orig_img, hist, n_valid, nan_mask, geo_coord_helpers = normalize_and_prepare_images(rcm_scaled_data)
-
-            # Save raw images to app state for later use (e.g., layering)
-            scene.raw_img = raw_img
-            scene.orig_img = orig_img
-            scene.hist = hist
-            scene.n_valid = n_valid
-            scene.nan_mask = nan_mask
-            scene.base_land_mask = land_mask
-            scene.rcm_200m_data = rcm_200m_data
-            scene.rcm_scaled_data = rcm_scaled_data
-
-            # Save geo coord helpers to app state for later use
-            scene.geo_coord_helpers = geo_coord_helpers
-            scene.tie_lines = rcm_data.get("tie_lines", None)
-            scene.tie_pixels = rcm_data.get("tie_pixels", None)
-            scene.tie_lats = rcm_data.get("tie_lats", None)
-            scene.tie_lons = rcm_data.get("tie_lons", None)
-
-            # Build tiepoint grid interpolator if available
-            if scene.tie_lines is not None:
-                rows, cols, lat_grid, lon_grid = tiepoints_1d_to_grid(scene.tie_lines, scene.tie_pixels, scene.tie_lats, scene.tie_lons)
-                scene.pix2ll = make_pix2ll(rows, cols, lat_grid, lon_grid)
-
-            scene.color_composites = orig_img
-            
-            scene.color_composites["(HH, HH, HV)"] = layer_imagery(
-                orig_img["HH"],
-                orig_img["HV"],
-                stack="(HH, HH, HV)"
-            )
-            scene.color_composites["(HH, HV, HV)"] = layer_imagery(
-                orig_img["HH"],
-                orig_img["HV"],
-                stack="(HH, HV, HV)"
-            )
-            
-            # Handle switching scenes with existing custom annotation to one without
-            if "Custom_Annotation" in scene.lbl_sources:
-                scene.filenames.pop()
-                scene.lbl_sources.pop()
 
             # Should be from display_controller later
             self.deps.app.choose_image()
-
-            self.deps.loading_bar.set(0.6)
-            self.deps.loading_bar_label.configure(text="Generating prediction...")
-            self.deps.app.update_idletasks()
 
             self.load_pred()
 
@@ -166,9 +90,7 @@ class SceneController:
             self.deps.widgets["brightness_slider"].set(0) # reset to default
             self.deps.app_state.display.brightness = 0.0
 
-            self.deps.loading_bar.set(1)
-            self.deps.loading_bar_label.configure(text="Inference complete")
-            self.deps.app.update_idletasks()
+            self._set_progress(1, "Inference complete")
 
             self.deps.app.after(3000, self.deps.loading_bar_label.grid_remove) # Hide loading bar after short delay
             self.deps.app.after(3000, self.deps.loading_bar.grid_remove) # Hide loading bar after short delay
@@ -183,33 +105,9 @@ class SceneController:
         """
 
         scene = self.deps.app_state.scene
-        anno = self.deps.app_state.anno
-
-        scene.predictions = {}
-        scene.land_nan_masks = {}
-        scene.boundmasks = {}
-
-        model_paths = []
-        model_folder = resource_path("model")
-
-        for file in os.listdir(model_folder):
-            if file.endswith(".pt"):
-                 model_paths.append(file)
-
-        model_path = model_paths[0] if model_paths else None
-        model_path = os.path.join(model_folder, model_path) if model_path else None
-        variables = run_pred_model(scene.lbl_sources[0], scene.rcm_200m_data, scene.base_land_mask, 
-                                                                  model_path=model_path, 
-                                                                  target_width = scene.rcm_scaled_data["dst_width"],
-                                                                  target_height = scene.rcm_scaled_data["dst_height"],
-                                                                  target_spacing=scene.target_spacing, device='cpu')
-        
-        existing_anno, anno.annotation_notes = load_existing_annotation(scene.scene_name)
-
-        if existing_anno is not None:
-            variables.append(existing_anno)
-            scene.lbl_sources.append("Custom_Annotation")
-            scene.filenames.append("{}/{}/{}".format(scene.lbl_sources[-1], scene.scene_name, "custom_annotation.png"))
+        loaded_sources, missing_sources, has_existing_annotation = (
+            self.scene_viewmodel.load_predictions(progress=self._set_progress)
+        )
         self.deps.annotation_panel.clear_notes()
         
         # Reset label source radio buttons
@@ -219,19 +117,16 @@ class SceneController:
         self.deps.widgets['mode_var_lbl_source'] = None
         self.deps.widgets['mode_var_lbl_source_prev'] = None
 
+        for key in missing_sources:
+            if key != 'Custom_Annotation':
+                messagebox.showinfo("Error", f"The selected scene does not contain prediction files for {key}.", parent=self.deps.app.master)
+
         # Add available label sources
-        for i, (key, pred, land_nan_mask, boundmask) in enumerate(variables):
-            if pred is None: 
-                if key != 'Custom_Annotation':
-                    messagebox.showinfo("Error", f"The selected scene does not contain prediction files for {key}.", parent=self.deps.app.master)
-                continue
+        for i, key in enumerate(loaded_sources):
             self.deps.app.update_label_source_widgets(key, i)
-            scene.predictions[key] = pred
-            scene.land_nan_masks[key] = land_nan_mask
-            scene.boundmasks[key] = boundmask
 
         custom_anno = "Custom_Annotation"
-        if custom_anno in scene.lbl_sources:
+        if has_existing_annotation and custom_anno in scene.lbl_sources:
             result = messagebox.askyesno("Custom Annotation Found",
                                          "An existing custom annotation was found for this scene. Do you want to view it?",
                                          parent=self.deps.app.master)

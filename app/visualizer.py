@@ -20,6 +20,11 @@ from controllers.annotation_controller import AnnotationController
 from controllers.canvas_events_controller import CanvasEventsController
 from controllers.zoom_controller import ZoomController
 from controllers.local_seg_controller import LocalSegController
+from viewmodels.annotation_viewmodel import AnnotationViewModel
+from viewmodels.display_viewmodel import DisplayViewModel
+from viewmodels.image_controls_viewmodel import ImageControlsViewModel
+from viewmodels.local_segmentation_viewmodel import LocalSegmentationViewModel
+from viewmodels.scene_viewmodel import SceneViewModel
 
 class Visualizer(ctk.CTk):
 
@@ -49,6 +54,15 @@ class Visualizer(ctk.CTk):
         self.annotation_mode = None 
         self.double_click_flag = False
 
+        self.scene_viewmodel = SceneViewModel(self.app_state)
+        self.display_viewmodel = DisplayViewModel(self.app_state)
+        self.image_controls_viewmodel = ImageControlsViewModel(
+            self.app_state,
+            self.display_viewmodel,
+        )
+        self.annotation_viewmodel = AnnotationViewModel(self.app_state)
+        self.local_segmentation_viewmodel = LocalSegmentationViewModel(self.app_state)
+
         layout = build_visualizer_layout(self, self.app_state)
 
         self.deps = AppDeps(
@@ -68,16 +82,17 @@ class Visualizer(ctk.CTk):
             widgets=layout.widgets,
         )
 
-        self.scene_controller = SceneController(self.deps)
-        self.display_controller = DisplayController(self.deps)
+        self.scene_controller = SceneController(self.deps, self.scene_viewmodel)
+        self.display_controller = DisplayController(self.deps, self.display_viewmodel)
         self.image_controls_controller = ImageControlsController(
                                             self.deps, 
-                                            self.display_controller
+                                            self.display_controller,
+                                            self.image_controls_viewmodel
                                             )
-        self.annotation_controller = AnnotationController(self.deps, self.display_controller)
+        self.annotation_controller = AnnotationController(self.deps, self.display_controller, self.annotation_viewmodel)
         self.zoom_controller = ZoomController(self.deps, self.display_controller, self.annotation_controller)
         self.canvas_events_controller = CanvasEventsController(self.deps, self.display_controller, self.annotation_controller, self.zoom_controller)
-        self.local_seg_controller = LocalSegController(self.deps, self.display_controller, self.annotation_controller, self.canvas_events_controller, self.zoom_controller)
+        self.local_seg_controller = LocalSegController(self.deps, self.display_controller, self.annotation_controller, self.canvas_events_controller, self.zoom_controller, self.local_segmentation_viewmodel)
 
         #%% INITIAL VISUALIZATION / STATE
         self.annotation_controller.reset_annotation()
@@ -207,6 +222,10 @@ class Visualizer(ctk.CTk):
             self.deps.evaluation_panel.load_existing_evaluation()
 
         return 1
+
+    @property
+    def mode_var_lbl_source(self):
+        return self.deps.widgets["mode_var_lbl_source"]
 
 
     # Canvas Events
