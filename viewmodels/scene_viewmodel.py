@@ -34,19 +34,19 @@ class SceneViewModel:
 
         if progress:
             progress(0.2, "Scaling images...")
-        rcm_200m_data, rcm_scaled_data = scale_hh_hv(
+        rcm_200m_data = scale_hh_hv(
             rcm_data,
             target_spacing_m=scene.target_spacing,
         )
 
         if progress:
             progress(0.35, "Building land mask...")
-        land_mask = build_land_masks(rcm_scaled_data)
+        land_mask = build_land_masks(rcm_200m_data)
 
         if progress:
             progress(0.5, "Normalizing data...")
         raw_img, orig_img, hist, n_valid, nan_mask, geo_coord_helpers = (
-            normalize_and_prepare_images(rcm_scaled_data)
+            normalize_and_prepare_images(rcm_200m_data)
         )
 
         scene.raw_img = raw_img
@@ -56,7 +56,7 @@ class SceneViewModel:
         scene.nan_mask = nan_mask
         scene.base_land_mask = land_mask
         scene.rcm_200m_data = rcm_200m_data
-        scene.rcm_scaled_data = rcm_scaled_data
+        scene.rcm_scaled_data = None
 
         scene.geo_coord_helpers = geo_coord_helpers
         scene.tie_lines = rcm_data.get("tie_lines", None)
@@ -112,8 +112,8 @@ class SceneViewModel:
             scene.rcm_200m_data,
             scene.base_land_mask,
             model_path=model_path,
-            target_width=scene.rcm_scaled_data["dst_width"],
-            target_height=scene.rcm_scaled_data["dst_height"],
+            target_width=scene.rcm_200m_data["dst_width"],
+            target_height=scene.rcm_200m_data["dst_height"],
             target_spacing=scene.target_spacing,
             device="cpu",
         )

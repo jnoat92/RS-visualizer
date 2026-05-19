@@ -657,24 +657,12 @@ def scale_hh_hv(rcm_data, target_spacing_m=200.0):
     # ------------------------------------------------------------
     # Scale
     if rcm_data["geometry"] == "earth":
-        rcm_data =  scale_hh_hv_earth_geometry(
-                    rcm_data,
-                    target_spacing_m=target_spacing_m,
-                    scale_tie_points=False,
-                    )
         rcm_200m_data =  scale_hh_hv_earth_geometry(
                     rcm_data,
                     target_spacing_m=200.0,
                     scale_tie_points=False,
                     )
     else: # sensor geometry
-        rcm_data = scale_hh_hv_sensor_geometry(
-                    rcm_data,
-                    target_spacing_m=target_spacing_m,
-                    range_spacing_m_key="range_pixel_spacing_m",
-                    azimuth_spacing_m_key="azimuth_pixel_spacing_m",
-                    scale_tie_points=False,
-                    )
         rcm_200m_data = scale_hh_hv_sensor_geometry(
                     rcm_data,
                     target_spacing_m=200.0,
@@ -686,12 +674,10 @@ def scale_hh_hv(rcm_data, target_spacing_m=200.0):
     # ------------------------------------------------------------
     # Convert back to dB if original data was in dB, to maintain consistency.
     if hh_scale == "db":
-        rcm_data["hh"] = linear_to_db(rcm_data["hh"])
-        rcm_data["hv"] = linear_to_db(rcm_data["hv"])
         rcm_200m_data["hh"] = linear_to_db(rcm_200m_data["hh"])
         rcm_200m_data["hv"] = linear_to_db(rcm_200m_data["hv"])
 
-    return rcm_200m_data, rcm_data
+    return rcm_200m_data
 
 
 def build_land_masks(rcm_200m_data):

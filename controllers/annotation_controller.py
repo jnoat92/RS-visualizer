@@ -157,6 +157,7 @@ class AnnotationController:
         """
         scene = self.deps.app_state.scene
         anno = self.deps.app_state.anno
+        display = self.deps.app_state.display
 
         if anno.selected_polygon_area_idx is None:
             if anno.annotation_mode == 'polygon':
@@ -200,7 +201,7 @@ class AnnotationController:
         # Do a vectorized compare of the existing prediction (only 1 so [0]) with the new prediction to get a mask of the changed area
         if self.deps.widgets["show_prev_anno_switch"].get():
             changed_area_mask = self.annotation_viewmodel.changed_area_mask()
-            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.deps.minimap.show_changed_area(scene.color_composites[display.channel_mode], changed_area_mask)
 
         self.display_controller.refresh_view()
         if anno.polygon_points_img_coor: 
@@ -209,11 +210,12 @@ class AnnotationController:
     def undo_redo_annotation(self, last_polygon_area_idx, last_colours, last_window):
         """Undo or redo an annotation by restoring the previous state."""
         scene = self.deps.app_state.scene
+        display = self.deps.app_state.display
         self.annotation_viewmodel.undo_redo_annotation(last_polygon_area_idx, last_colours, last_window)
         # Show annotated area on minimap
         if self.deps.widgets["show_prev_anno_switch"].get():
             changed_area_mask = self.annotation_viewmodel.changed_area_mask()
-            self.deps.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.deps.minimap.show_changed_area(scene.color_composites[display.channel_mode], changed_area_mask)
 
         # Reset annotation and refresh view
         self.reset_annotation()
@@ -251,26 +253,26 @@ class AnnotationController:
         scene = self.deps.app_state.scene
         display = self.deps.app_state.display
         custom_anno = "Custom_Annotation"
-        img = scene.img
+        # img = scene.img
 
-        # Check if contrast or brightness is applied, if so go back to 
-        # the original image for minimap display to avoid confusion with 
-        # contrast/brightness changes
-        if display.contrast != 0.0 or display.brightness != 0.0:
-            if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
-                img = layer_imagery(
-                    scene.orig_img["HH"],
-                    scene.orig_img["HV"],
-                    display.channel_mode
-                )
-            else:
-                img = scene.orig_img[display.channel_mode]
+        # # Check if contrast or brightness is applied, if so go back to 
+        # # the original image for minimap display to avoid confusion with 
+        # # contrast/brightness changes
+        # if display.contrast != 0.0 or display.brightness != 0.0:
+        #     if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
+        #         img = layer_imagery(
+        #             scene.orig_img["HH"],
+        #             scene.orig_img["HV"],
+        #             display.channel_mode
+        #         )
+        #     else:
+        #         img = scene.orig_img[display.channel_mode]
 
         if custom_anno in scene.lbl_sources and self.deps.widgets["show_prev_anno_switch"].get():
             changed_area_mask = scene.predictions[custom_anno][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.deps.minimap.show_changed_area(img, changed_area_mask)
+            self.deps.minimap.show_changed_area(scene.color_composites[display.channel_mode], changed_area_mask)
         else:
-            self.deps.minimap.set_image(img)
+            self.deps.minimap.set_image(scene.scene.color_composites[display.channel_mode])
 
 
     def label_water(self, bucket_fill=False):

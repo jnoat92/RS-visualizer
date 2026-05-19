@@ -345,8 +345,8 @@ class CanvasEventsController:
             else:
                 # To handle cases where transformer is not available, use tie points to interpolate lat/lon
                 if scene.geo_coord_helpers["transformer"] is None:
-                    row_src, col_src = ds_to_src_pixel(y, x, scene.rcm_scaled_data["src_height"], scene.rcm_scaled_data["src_width"],
-                                                    scene.rcm_scaled_data["dst_height"], scene.rcm_scaled_data["dst_width"])
+                    row_src, col_src = ds_to_src_pixel(y, x, scene.rcm_200m_data["src_height"], scene.rcm_200m_data["src_width"],
+                                                    scene.rcm_200m_data["dst_height"], scene.rcm_200m_data["dst_width"])
                     lat, lon = scene.pix2ll(row_src, col_src)
                 else:
                     # Convert downscaled image coordinates to original image coordinates

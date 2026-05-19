@@ -285,6 +285,7 @@ class AnnotationPanel(ctk.CTkFrame):
         """Apply the selected label source to the main canvas for the selected area."""
         scene = self.app_state.scene
         anno = self.app_state.anno
+        display = self.app_state.display
         key = self.zoom_mode_var_lbl_source.get()
         if key not in scene.predictions:
             messagebox.showinfo("Error", f"Invalid label source {key}.", parent=self.zoom_window)
@@ -329,7 +330,7 @@ class AnnotationPanel(ctk.CTkFrame):
             self.unsaved_changes = True
             #self.save_button.configure(state=ctk.NORMAL)
             changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.command_parent.deps.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.command_parent.deps.minimap.show_changed_area(scene.color_composites[display.channel_mode], changed_area_mask)
         else:
             # Whole area reset
             if not messagebox.askyesnocancel("Reset whole annotation", "Please note you are about to reset the entire annotation.\n" \
