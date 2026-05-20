@@ -1,5 +1,7 @@
 /__pycache__
 /evaluations
-
+__pycache__/
 SeaIceMap.spec
+ArcticScope.spec
+/Custom_annotation
 /build
