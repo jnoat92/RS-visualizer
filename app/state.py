@@ -6,6 +6,7 @@ Last modified: Apr 2026
 
 import numpy as np
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 # Data class that houses values that when changed requires a refresh_view()
 @dataclass(slots=True)
@@ -31,6 +32,7 @@ class SceneState:
     folder_path: str = ""
     filenames: list[str] = field(default_factory=list)
     current_index: int = 0
+    sar_img: object = None # Store the rasterio dataset object for the currently loaded image
 
     # Current image data
     img: np.ndarray = None
@@ -45,6 +47,7 @@ class SceneState:
 
     # Target spacing for RCM data (e.g., 200m or 100m)
     target_spacing: int = 200
+    scale_factor: float = 10.0 # Scale factor from original resolution to target spacing (e.g., 10.0 for 20m to 200m)
 
     pix2ll: object = None # Function to convert pixel coordinates to lat/lon, created from tie points if available
 

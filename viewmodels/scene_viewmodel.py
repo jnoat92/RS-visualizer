@@ -31,6 +31,9 @@ class SceneViewModel:
 
         scene.folder_path = folder_path
         scene.scene_name = os.path.basename(os.path.normpath(folder_path))
+        scene.sar_img = rcm_data["sar_img"]
+        rcm_data["sar_img"] = None  # Free memory by removing the dataset from rcm_data dict
+        print(f"Loaded SAR image with shape {scene.sar_img.width}x{scene.sar_img.height} and {scene.sar_img.count} bands")
 
         if progress:
             progress(0.2, "Scaling images...")
@@ -57,6 +60,8 @@ class SceneViewModel:
         scene.base_land_mask = land_mask
         scene.rcm_200m_data = rcm_200m_data
         scene.rcm_scaled_data = None
+        scene.scale_factor = round(scene.sar_img.width / rcm_200m_data["dst_width"], 2)  # Calculate scale factor based on original and target widths
+        print(f"Calculated scale factor: {scene.scale_factor:.4f} (original width: {scene.sar_img.width}, target width: {rcm_200m_data['dst_width']})")
 
         scene.geo_coord_helpers = geo_coord_helpers
         scene.tie_lines = rcm_data.get("tie_lines", None)

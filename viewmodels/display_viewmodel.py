@@ -64,6 +64,7 @@ class DisplayViewModel:
             canvas_width,
             canvas_height,
             overlay.show_local_segmentation,
+            scene.sar_img,
         )
         if result is None:
             self.render_result = None

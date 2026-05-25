@@ -285,6 +285,7 @@ def load_rcm_product(data_dir):
 
         out = {
             "folder_name": str(data_dir),
+            "sar_img": rasterio.open(img_path),
             "product_id": product_id,
             "hh": hh,
             "hv": hv,
