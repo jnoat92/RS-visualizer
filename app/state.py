@@ -44,6 +44,7 @@ class SceneState:
 
     # Store color composites
     color_composites: dict[str, np.ndarray] = field(default_factory=dict)
+    band_stacks: dict[str, list[str]] = field(default_factory=dict)
 
     # Target spacing for RCM data (e.g., 200m or 100m)
     target_spacing: int = 200

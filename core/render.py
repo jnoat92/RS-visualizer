@@ -14,7 +14,7 @@ from core.utils import apply_brightness
 def crop_resize(pred, img, boundmask, landmask, 
                 local_boundmask, nan_mask, zoom_factor, 
                 offset_x, offset_y, brightness, canvas_width, 
-                canvas_height, show_local_segmentation, sar_img):
+                canvas_height, show_local_segmentation, sar_img, band_stack):
     """
     Crop the image to the current viewport, resize it according to the zoom factor, 
     and apply brightness adjustment.
@@ -74,7 +74,12 @@ def crop_resize(pred, img, boundmask, landmask,
     else:
         local_boundmask_resized = None
 
-    display_img = read_band_window(sar_img, "HH", view_left, view_top, view_right, view_bottom, 10.0, canvas_width, canvas_height)
+    display_img = read_band_window(sar_img, band_stack, view_left, view_top, view_right, view_bottom, 10.0, canvas_width, canvas_height)
+    display_img = cv2.resize(display_img, (zoomed_width, zoomed_height), interpolation=cv2.INTER_LINEAR)
+    display_img = apply_brightness(display_img, nan_mask_resized, brightness, clip=True)
+
+    #print(f"Windowed image shape: {display_img.shape}, Display image shape: {img_resized.shape}")
+    #print(f"Pred resized shape: {pred_resized.shape}, Boundmask resized shape: {boundmask_resized.shape}, Landmask resized shape: {landmask_resized.shape}, Local boundmask resized shape: {local_boundmask_resized.shape if local_boundmask_resized is not None else None}")
 
     return pred_resized, display_img, boundmask_resized, landmask_resized, local_boundmask_resized, draw_x, draw_y
 
@@ -117,7 +122,7 @@ def layer_imagery(HH_img, HV_img, stack="(HH, HH, HV)"):
 
 def read_band_window(
     sar_img,
-    band_name: str,
+    band_stack: list[str],
     x_min: float,
     y_min: float,
     x_max: float,
@@ -143,7 +148,11 @@ def read_band_window(
         2D float32 NumPy array with shape out_height x out_width.
     """
     ds = sar_img
-    band_index = (1 if band_name == "HH" else 2)  # Assuming HH is band 1 and HV is band 2
+    band_index_hh = 1
+    band_index_hv = 2
+
+    arr_hh = None
+    arr_hv = None
 
     # Size of the output array after scaling
     out_width = max(1, int((x_max - x_min)))
@@ -172,6 +181,27 @@ def read_band_window(
         cols=(int(x_min), int(np.ceil(x_max))),
     )
 
+    if "HH" in band_stack:
+        arr_hh = get_band_array(ds, band_index_hh, window, out_height, out_width)
+
+    if "HV" in band_stack:
+        arr_hv = get_band_array(ds, band_index_hv, window, out_height, out_width)
+
+    # Constuct the RGB array based on the requested band stack
+    if band_stack == ["HH"]:
+        rgb = np.dstack([arr_hh, arr_hh, arr_hh])
+    elif band_stack == ["HV"]:
+        rgb = np.dstack([arr_hv, arr_hv, arr_hv])
+    elif band_stack == ["HH", "HH", "HV"]:
+        rgb = np.dstack([arr_hh, arr_hh, arr_hv])
+    elif band_stack == ["HH", "HV", "HV"]:
+        rgb = np.dstack([arr_hh, arr_hv, arr_hv])
+
+    # plt.imshow(rgb)
+    # plt.show(block=False)
+    return rgb
+
+def get_band_array(ds, band_index, window, out_height, out_width):
     arr = ds.read(
         band_index,
         window=window,
@@ -219,8 +249,4 @@ def read_band_window(
     gray = np.nan_to_num(gray, nan=0.0, posinf=255.0, neginf=0.0)
     gray = np.clip(gray, 0, 255).astype(np.uint8)
 
-    rgb = np.dstack([gray, gray, gray])
-
-    # plt.imshow(rgb)
-    # plt.show()
-    return rgb
+    return gray

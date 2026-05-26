@@ -65,6 +65,7 @@ class DisplayViewModel:
             canvas_height,
             overlay.show_local_segmentation,
             scene.sar_img,
+            scene.band_stacks[display.channel_mode],
         )
         if result is None:
             self.render_result = None

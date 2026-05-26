@@ -33,6 +33,7 @@ class Visualizer(ctk.CTk):
 
         self.app_state = AppState()
         display = self.app_state.display
+        scene = self.app_state.scene
         # ==================== GUI DESIGN
 
         # ------- Visualizer settings
@@ -96,6 +97,11 @@ class Visualizer(ctk.CTk):
 
         #%% INITIAL VISUALIZATION / STATE
         self.annotation_controller.reset_annotation()
+
+        scene.band_stacks = {"HH": ["HH"],
+                               "HV": ["HV"],
+                               "(HH, HH, HV)": ["HH", "HH", "HV"],
+                               "(HH, HV, HV)": ["HH", "HV", "HV"]}
 
         display.channel_mode = self.deps.widgets['mode_var_color_composite'].get()
         if display.channel_mode == "(HH/HV)":
