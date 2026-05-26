@@ -50,6 +50,8 @@ class DisplayViewModel:
         display = self.app_state.display
         overlay = self.app_state.overlay
 
+
+        # Add in scene.hist["HH"] and scene.hist["HV"] and display.contrast for contrast adjustment
         result = crop_resize(
             scene.predictions[scene.active_source],
             scene.img,
@@ -66,6 +68,9 @@ class DisplayViewModel:
             overlay.show_local_segmentation,
             scene.sar_img,
             scene.band_stacks[display.channel_mode],
+            scene.hist["HH"],
+            scene.hist["HV"],
+            display.contrast,
         )
         if result is None:
             self.render_result = None

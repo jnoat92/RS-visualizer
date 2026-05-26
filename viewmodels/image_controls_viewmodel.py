@@ -25,6 +25,8 @@ class ImageControlsViewModel:
         display = self.app_state.display
         display.contrast = (float(value) / 200) * 0.15
 
+        # Store contrast value
+
         if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
             hh_contrasted = enhance_outlier_slider(
                 img_u8=scene.orig_img["HH"],

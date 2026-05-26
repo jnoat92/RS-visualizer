@@ -68,7 +68,7 @@ def build_lut_u8(lo: float, hi: float) -> np.ndarray:
 def enhance_outlier_slider(
     img_u8: np.ndarray,
     hist: np.ndarray,
-    n_valid: np.ndarray,
+    n_valid: np.ndarray | None = None,
     s: float = 0.0              # slider in [0, 0.25]
 ):
     """
@@ -77,7 +77,8 @@ def enhance_outlier_slider(
     hist:
       - (C,256) int counts computed on valid pixels
     n_valid:
-      - (C,) valid pixel counts (or scalar if C==1)
+      - (C,) valid pixel counts (or scalar if C==1). If omitted, counts are
+        derived from hist. A valid mask is also accepted for windowed images.
     s:
       - 0 -> exact original
       - >0 -> bth = s/2, uth = 1 - bth
@@ -94,12 +95,38 @@ def enhance_outlier_slider(
         img3 = img_u8
 
     H, W, C = img3.shape
-    assert hist.shape[0] == C and hist.shape[1] == 256
+
+    hist = np.asarray(hist)
+    if hist.ndim == 1:
+        hist = hist[None, :]
+
+    assert hist.shape[1] == 256
+
+    # Full-scene HH/HV images are stored as tiled grayscale RGB, so their
+    # histograms have 3 identical channels. Window reads are plain 2D arrays.
+    if C == 1 and hist.shape[0] > 1:
+        hist = hist[:1]
+
+    assert hist.shape[0] == C
 
     # Near-zero -> return original quickly
     if s == 0.0:
         out3 = img3.copy()
         return out3[..., 0] if img_u8.ndim == 2 else out3
+
+    if n_valid is None:
+        n_valid_counts = hist.sum(axis=1)
+    else:
+        n_valid_arr = np.asarray(n_valid)
+        if n_valid_arr.dtype == bool:
+            if n_valid_arr.ndim == 2 and C == 1:
+                n_valid_counts = np.array([int(n_valid_arr.sum())], dtype=np.int64)
+            elif n_valid_arr.ndim == 3 and n_valid_arr.shape[2] == C:
+                n_valid_counts = n_valid_arr.reshape(-1, C).sum(axis=0)
+            else:
+                n_valid_counts = hist.sum(axis=1)
+        else:
+            n_valid_counts = n_valid_arr
 
     bth = 0.5 * s
     uth = 1.0 - bth
@@ -108,7 +135,7 @@ def enhance_outlier_slider(
 
     # Compute quantiles and LUTs per channel, then apply LUT to the image
     for c in range(C):
-        n = int(n_valid[c]) if np.ndim(n_valid) > 0 else int(n_valid)
+        n = int(n_valid_counts[c]) if np.ndim(n_valid_counts) > 0 else int(n_valid_counts)
         l = quantile_from_hist_linear(hist[c], n, bth)
         h = quantile_from_hist_linear(hist[c], n, uth)
 

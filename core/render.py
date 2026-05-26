@@ -9,12 +9,14 @@ from rasterio.windows import Window
 from skimage.morphology import binary_dilation
 import cv2
 from core.utils import apply_brightness
+from core.contrast_handler import enhance_outlier_slider
 
 # TO DO: Optimize as it is the bottleneck for performance when changing contrast/brightness and during panning/zooming
 def crop_resize(pred, img, boundmask, landmask, 
                 local_boundmask, nan_mask, zoom_factor, 
                 offset_x, offset_y, brightness, canvas_width, 
-                canvas_height, show_local_segmentation, sar_img, band_stack):
+                canvas_height, show_local_segmentation, 
+                sar_img, band_stack, hist_hh, hist_hv, contrast):
     """
     Crop the image to the current viewport, resize it according to the zoom factor, 
     and apply brightness adjustment.
@@ -74,7 +76,11 @@ def crop_resize(pred, img, boundmask, landmask,
     else:
         local_boundmask_resized = None
 
-    display_img = read_band_window(sar_img, band_stack, view_left, view_top, view_right, view_bottom, 10.0, canvas_width, canvas_height)
+    display_img = read_band_window(sar_img, band_stack, 
+                                   view_left, view_top, 
+                                   view_right, view_bottom, 
+                                   10.0, canvas_width, canvas_height, 
+                                   hist_hh, hist_hv, contrast)
     display_img = cv2.resize(display_img, (zoomed_width, zoomed_height), interpolation=cv2.INTER_LINEAR)
     display_img = apply_brightness(display_img, nan_mask_resized, brightness, clip=True)
 
@@ -130,6 +136,9 @@ def read_band_window(
     scale_factor: float,
     canvas_width: int,
     canvas_height: int,
+    hist_hh: np.ndarray,
+    hist_hv: np.ndarray,
+    contrast: float
 ) -> np.ndarray:
     """
     Read a window from one band and resample it to the requested output size.
@@ -183,9 +192,11 @@ def read_band_window(
 
     if "HH" in band_stack:
         arr_hh = get_band_array(ds, band_index_hh, window, out_height, out_width)
+        arr_hh = enhance_outlier_slider(arr_hh, hist_hh, s=contrast)
 
     if "HV" in band_stack:
         arr_hv = get_band_array(ds, band_index_hv, window, out_height, out_width)
+        arr_hv = enhance_outlier_slider(arr_hv, hist_hv, s=contrast)
 
     # Constuct the RGB array based on the requested band stack
     if band_stack == ["HH"]:
