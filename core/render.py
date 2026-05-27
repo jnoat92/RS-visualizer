@@ -6,6 +6,7 @@ Last modified: Mar 2026
 import numpy as np
 import matplotlib.pyplot as plt
 from rasterio.windows import Window
+from rasterio.enums import Resampling
 from skimage.morphology import binary_dilation
 import cv2
 from core.utils import apply_brightness
@@ -24,8 +25,6 @@ def crop_resize(pred, img, boundmask, landmask,
     and nan_mask to ensure correct rendering of different areas 
     (e.g., land, boundaries, local segmentation boundaries, and NaN areas).
     """
-
-    print(zoom_factor)
     zoom_factor = max(0.01, zoom_factor)  # Prevent division by zero or negative zoom
     
     crop = get_zoomed_region(pred, zoom_factor, offset_x, offset_y, canvas_width, canvas_height)
@@ -84,9 +83,6 @@ def crop_resize(pred, img, boundmask, landmask,
     display_img = cv2.resize(display_img, (zoomed_width, zoomed_height), interpolation=cv2.INTER_LINEAR)
     display_img = apply_brightness(display_img, nan_mask_resized, brightness, clip=True)
 
-    #print(f"Windowed image shape: {display_img.shape}, Display image shape: {img_resized.shape}")
-    #print(f"Pred resized shape: {pred_resized.shape}, Boundmask resized shape: {boundmask_resized.shape}, Landmask resized shape: {landmask_resized.shape}, Local boundmask resized shape: {local_boundmask_resized.shape if local_boundmask_resized is not None else None}")
-
     return pred_resized, display_img, boundmask_resized, landmask_resized, local_boundmask_resized, draw_x, draw_y
 
 # Next step is to combine zoom factor, offset, etc into a state variable
@@ -105,8 +101,6 @@ def get_zoomed_region(image, zoom_factor, offset_x, offset_y, canvas_width, canv
     if img_right <= img_left or img_bottom <= img_top:
         return None
     
-    print(f"Zoomed region in image coordinates: top={img_top}, bottom={img_bottom}, left={img_left}, right={img_right}")
-
     return img_top, img_bottom, img_left, img_right
 
 # Should we put set_overlay here as well as it counts as rendering, keep display_image in visualizer
@@ -123,7 +117,6 @@ def layer_imagery(HH_img, HV_img, stack="(HH, HH, HV)"):
     else: # "(HH, HV, HV)"
         layered_img = np.stack([HH_img, HV_img, HV_img], axis=-1)
 
-    # print(layered_img.shape)
     return layered_img
 
 def read_band_window(
@@ -172,15 +165,16 @@ def read_band_window(
     if abs((out_width / out_height) - (canvas_width / canvas_height)) < 0.01:
         out_width = canvas_width
         out_height = canvas_height
-
+    # Else if the window is very small (e.g., during heavy zoom in), we can also scale to canvas size to avoid issues with very small output sizes
+    elif out_width < 200 or out_height < 200:
+        out_width = canvas_width
+        out_height = canvas_height
 
     # Size of the window to read from the source image, scaled by the factor
     x_min = max(0, min(ds.width, x_min * scale_factor))
     x_max = max(0, min(ds.width, x_max * scale_factor))
     y_min = max(0, min(ds.height, y_min * scale_factor))
     y_max = max(0, min(ds.height, y_max * scale_factor))
-
-    print(x_min, y_min, x_max, y_max)
 
     if x_max <= x_min or y_max <= y_min:
         return np.zeros((max(1, out_height), max(1, out_width)), dtype=np.float32)
@@ -218,6 +212,7 @@ def get_band_array(ds, band_index, window, out_height, out_width):
         window=window,
         out_shape=(max(1, out_height), max(1, out_width)),
         masked=True,
+        resampling=Resampling.nearest,
     )
 
     arr = np.asarray(arr.filled(np.nan), dtype=np.float32)
