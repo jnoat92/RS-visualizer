@@ -48,7 +48,7 @@ class SceneViewModel:
         if progress:
             progress(0.5, "Normalizing data...")
         raw_img, orig_img, hist, n_valid, nan_mask, geo_coord_helpers = (
-            normalize_and_prepare_images(rcm_200m_data)
+            normalize_and_prepare_images(rcm_200m_data, scene.normalization_method)
         )
 
         scene.raw_img = raw_img
@@ -103,12 +103,17 @@ class SceneViewModel:
         scene.land_nan_masks = {}
         scene.boundmasks = {}
 
-        model_folder = resource_path("model")
-        model_paths = [
-            file for file in os.listdir(model_folder)
-            if file.endswith(".pt")
-        ]
-        model_path = os.path.join(model_folder, model_paths[0]) if model_paths else None
+        if scene.model_path is None or not os.path.isfile(scene.model_path):
+            model_paths = []
+            model_folder = resource_path("model")
+
+            for file in os.listdir(model_folder):
+                if file.endswith((".h5", ".pt", ".pth")):
+                    model_paths.append(file)
+            model_path = model_paths[0] if model_paths else None
+            model_path = os.path.join(model_folder, model_path) if model_path else None
+        else:
+            model_path = scene.model_path
 
         variables = run_pred_model(
             scene.lbl_sources[0],

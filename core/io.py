@@ -699,7 +699,7 @@ def build_land_masks(rcm_200m_data):
 
     return land_mask
 
-def normalize_and_prepare_images(rcm_200m_data):
+def normalize_and_prepare_images(rcm_200m_data, normalization_method="min-max"):
     hh = rcm_200m_data["hh"]
     hv = rcm_200m_data["hv"]
 

@@ -135,3 +135,15 @@ class SceneController:
                 self.deps.widgets['mode_var_lbl_source'].set(custom_anno)
 
             self.deps.app.choose_image() # Refresh image to show annotation on minimap
+
+    def set_normalization_method(self, method):
+        """
+        Set the normalization method for the current scene.
+        """
+        self.deps.app_state.scene.normalization_method = method.lower()
+
+    def set_model_file(self, model_path):
+        """
+        Set the model file path for the current scene.
+        """
+        self.deps.app_state.scene.model_path = model_path

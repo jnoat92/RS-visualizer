@@ -49,6 +49,8 @@ class SceneState:
     # Target spacing for RCM data (e.g., 200m or 100m)
     target_spacing: int = 200
     scale_factor: float = 10.0 # Scale factor from original resolution to target spacing (e.g., 10.0 for 20m to 200m)
+    normalization_method: str = "min-max"
+    model_path: str = ""
 
     pix2ll: object = None # Function to convert pixel coordinates to lat/lon, created from tie points if available
 
