@@ -1,7 +1,7 @@
 '''
 Segmentation related functions
 
-Last modified: Mar 2026
+Last modified: Jun 2026
 '''
 
 import numpy as np
@@ -9,7 +9,7 @@ from shapely import polygons
 from skimage.measure import find_contours, label
 from magic_py.magic_rag import magic_rag
 
-from core.utils import erase_edge_touching_polygons_numba
+from model.utils import erase_edge_touching_polygons_numba
 
 def get_segment_contours(pred, x, y):
     """Get contours for a specific segment in the prediction image."""
@@ -47,9 +47,9 @@ def IRGS(img, n_classes, n_iter, mask=None):
         rag = magic_rag(img, msk=None, N_class=n_classes, verbose=True)
     else:
         rag = magic_rag(img, msk=mask, N_class=n_classes, verbose=True)
-    print("Initializing k-means with", n_classes, "classes")
+    #print("Initializing k-means with", n_classes, "classes")
     rag.initialize_kmeans()
-    print("Performing", str(n_iter), "IRGS iterations...")
+    #print("Performing", str(n_iter), "IRGS iterations...")
     # for j in tqdm(range(n_iter), ncols=50):
     for j in range(n_iter):
         # rag.irgs_step(beta1=beta1, current_iter=i+1)

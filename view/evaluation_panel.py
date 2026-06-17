@@ -1,7 +1,7 @@
 '''
 Evaluation panel setup and functions
 
-Last modified: Jan 2026
+Last modified: Jun 2026
 '''
 
 import customtkinter as ctk

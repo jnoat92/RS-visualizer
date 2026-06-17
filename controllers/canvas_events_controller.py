@@ -4,14 +4,14 @@ clicks, double-clicks, and movements. It interacts with the display,
 zoom, annotation, and panel controllers to perform actions based on 
 user input.
 
-Last modified: Apr 2026
+Last modified: Jun 2026
 '''
 
 import numpy as np
 from rasterio.transform import xy
 from tkinter import messagebox
-from core.segmentation import get_segment_contours
-from core.utils import ds_to_src_pixel, decimal_to_dms
+from model.segmentation import get_segment_contours
+from model.utils import ds_to_src_pixel, decimal_to_dms
 
 
 class CanvasEventsController:
@@ -309,14 +309,7 @@ class CanvasEventsController:
             else:
                 contours, mask = get_segment_contours(scene.predictions[scene.active_source], y, x)
 
-            # select polygon area on image
-            anno.selected_polygon_area_idx = [(y, x) for y, x in zip(*np.where(mask))]
-            img_y_min = np.asarray(anno.selected_polygon_area_idx)[:,0].min()
-            img_y_max = np.asarray(anno.selected_polygon_area_idx)[:,0].max()
-            img_x_min = np.asarray(anno.selected_polygon_area_idx)[:,1].min()
-            img_x_max = np.asarray(anno.selected_polygon_area_idx)[:,1].max()
-            anno.selected_polygon_window = (img_y_min, img_y_max, img_x_min, img_x_max)
-            anno.selected_polygon_area_idx = tuple(zip(*anno.selected_polygon_area_idx))
+            self.annotation_controller.annotation_viewmodel.set_selected_segment(contours, mask)
 
             # Check if selected area is all land/nan
             if scene.land_nan_masks[scene.active_source][anno.selected_polygon_area_idx].all():
@@ -324,8 +317,6 @@ class CanvasEventsController:
                 return
             
             # draw polygon(s) on canvas
-            anno.polygon_points_img_coor = [[(x, y) for y, x in c] for c in contours]
-            anno.multiple_polygons = True
             self.annotation_controller.draw_polygon_on_canvas()
 
             # If in bucket fill mode and double clicked
@@ -354,8 +345,8 @@ class CanvasEventsController:
             else:
                 # To handle cases where transformer is not available, use tie points to interpolate lat/lon
                 if scene.geo_coord_helpers["transformer"] is None:
-                    row_src, col_src = ds_to_src_pixel(y, x, scene.rcm_scaled_data["src_height"], scene.rcm_scaled_data["src_width"],
-                                                    scene.rcm_scaled_data["dst_height"], scene.rcm_scaled_data["dst_width"])
+                    row_src, col_src = ds_to_src_pixel(y, x, scene.rcm_200m_data["src_height"], scene.rcm_200m_data["src_width"],
+                                                    scene.rcm_200m_data["dst_height"], scene.rcm_200m_data["dst_width"])
                     lat, lon = scene.pix2ll(row_src, col_src)
                 else:
                     # Convert downscaled image coordinates to original image coordinates

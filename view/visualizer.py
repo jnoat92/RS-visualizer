@@ -3,7 +3,7 @@ Visualizer module for Remote Sensing Visualizer application
 
 Contains the Visualizer class which manages the GUI and image processing.
 
-Last modified: Apr 2026
+Last modified: Jun 2026
 '''
 import customtkinter as ctk
 import tkinter as tk
@@ -11,8 +11,9 @@ from tkinter import Canvas, filedialog, messagebox
 import numpy as np
 
 from app.state import AppState
-from app.dependencies import AppDeps
-from ui.visualizer_layout import build_visualizer_layout
+from view.app_dependencies import AppDeps
+from view.visualizer_layout import build_visualizer_layout
+from view.setup_window import SetupWindow
 from controllers.scene_controller import SceneController
 from controllers.display_controller import DisplayController
 from controllers.image_controls_controller import ImageControlsController
@@ -20,6 +21,11 @@ from controllers.annotation_controller import AnnotationController
 from controllers.canvas_events_controller import CanvasEventsController
 from controllers.zoom_controller import ZoomController
 from controllers.local_seg_controller import LocalSegController
+from viewmodel.annotation_viewmodel import AnnotationViewModel
+from viewmodel.display_viewmodel import DisplayViewModel
+from viewmodel.image_controls_viewmodel import ImageControlsViewModel
+from viewmodel.local_segmentation_viewmodel import LocalSegmentationViewModel
+from viewmodel.scene_viewmodel import SceneViewModel
 
 class Visualizer(ctk.CTk):
 
@@ -28,6 +34,7 @@ class Visualizer(ctk.CTk):
 
         self.app_state = AppState()
         display = self.app_state.display
+        scene = self.app_state.scene
         # ==================== GUI DESIGN
 
         # ------- Visualizer settings
@@ -49,6 +56,15 @@ class Visualizer(ctk.CTk):
         self.annotation_mode = None 
         self.double_click_flag = False
 
+        self.scene_viewmodel = SceneViewModel(self.app_state)
+        self.display_viewmodel = DisplayViewModel(self.app_state)
+        self.image_controls_viewmodel = ImageControlsViewModel(
+            self.app_state,
+            self.display_viewmodel,
+        )
+        self.annotation_viewmodel = AnnotationViewModel(self.app_state)
+        self.local_segmentation_viewmodel = LocalSegmentationViewModel(self.app_state)
+
         layout = build_visualizer_layout(self, self.app_state)
 
         self.deps = AppDeps(
@@ -59,6 +75,7 @@ class Visualizer(ctk.CTk):
             minimap=layout.minimap,
             minimap_window_id=layout.minimap_window_id,
             status_bar=layout.status_bar,
+            setup_window=None, # Initialized when opened
             annotation_panel=layout.annotation_panel,
             evaluation_panel=layout.evaluation_panel,
             annotation_window=layout.annotation_window,
@@ -68,19 +85,29 @@ class Visualizer(ctk.CTk):
             widgets=layout.widgets,
         )
 
-        self.scene_controller = SceneController(self.deps)
-        self.display_controller = DisplayController(self.deps)
+        self.scene_controller = SceneController(self.deps, self.scene_viewmodel)
+        self.display_controller = DisplayController(self.deps, self.display_viewmodel)
         self.image_controls_controller = ImageControlsController(
                                             self.deps, 
-                                            self.display_controller
+                                            self.display_controller,
+                                            self.image_controls_viewmodel
                                             )
-        self.annotation_controller = AnnotationController(self.deps, self.display_controller)
+        self.annotation_controller = AnnotationController(self.deps, self.display_controller, self.annotation_viewmodel)
         self.zoom_controller = ZoomController(self.deps, self.display_controller, self.annotation_controller)
         self.canvas_events_controller = CanvasEventsController(self.deps, self.display_controller, self.annotation_controller, self.zoom_controller)
-        self.local_seg_controller = LocalSegController(self.deps, self.display_controller, self.annotation_controller, self.canvas_events_controller, self.zoom_controller)
+        self.local_seg_controller = LocalSegController(self.deps, self.display_controller, self.annotation_controller, self.canvas_events_controller, self.zoom_controller, self.local_segmentation_viewmodel)
+
+        self.deps.setup_window = SetupWindow(self.deps, self.scene_controller)
+        # Set settings button command after SetupWindow is created
+        self.deps.widgets['settings_btn'].configure(command=self.deps.setup_window.open)
 
         #%% INITIAL VISUALIZATION / STATE
         self.annotation_controller.reset_annotation()
+
+        scene.band_stacks = {"HH": ["HH"],
+                               "HV": ["HV"],
+                               "(HH, HH, HV)": ["HH", "HH", "HV"],
+                               "(HH, HV, HV)": ["HH", "HV", "HV"]}
 
         display.channel_mode = self.deps.widgets['mode_var_color_composite'].get()
         if display.channel_mode == "(HH/HV)":
@@ -90,7 +117,8 @@ class Visualizer(ctk.CTk):
         self._set_all_children_enabled(
             self.deps.sidebar,
             False,
-            exclude=[self.deps.widgets['choose_SAR_scene_toggle_btn']]
+            exclude=[self.deps.widgets['choose_SAR_scene_toggle_btn'],
+                     self.deps.widgets['settings_btn']]
         )
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -207,6 +235,10 @@ class Visualizer(ctk.CTk):
             self.deps.evaluation_panel.load_existing_evaluation()
 
         return 1
+
+    @property
+    def mode_var_lbl_source(self):
+        return self.deps.widgets["mode_var_lbl_source"]
 
 
     # Canvas Events

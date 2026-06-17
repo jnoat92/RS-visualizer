@@ -11,23 +11,25 @@ Last modified: Apr 2026
 '''
 
 import customtkinter as ctk
-from core.render import layer_imagery
-from core.contrast_handler import enhance_outlier_slider
 
 
 class ImageControlsController:
-    def __init__(self, deps, display_controller):
+    def __init__(self, deps, display_controller, image_controls_viewmodel):
         self.deps = deps
         self.display_controller = display_controller
+        self.image_controls_viewmodel = image_controls_viewmodel
 
     def color_composite(self):
         """
         Handle color composite selection changes, enable/disable HH/HV switch accordingly, and update the displayed image.
         """
-        display = self.deps.app_state.display
-        display.channel_mode = self.deps.widgets["mode_var_color_composite"].get()
+        channel_mode = self.deps.widgets["mode_var_color_composite"].get()
+        switch_enabled = self.image_controls_viewmodel.set_color_composite(
+            channel_mode,
+            self.deps.widgets["hh_hv_switch"].get(),
+        )
 
-        if display.channel_mode == "(HH/HV)":
+        if switch_enabled:
             self.deps.widgets["hh_hv_switch"].configure(state=ctk.NORMAL)
             self.HH_HV(get_channel=True)
         else:
@@ -39,16 +41,17 @@ class ImageControlsController:
         """
         Handle color composite changes, update the displayed image based on the selected channel, and reset contrast slider.
         """
-        display = self.deps.app_state.display
         scene = self.deps.app_state.scene
 
         if get_channel:
-            display.channel_mode = "HV" if self.deps.widgets["hh_hv_switch"].get() else "HH"
+            self.image_controls_viewmodel.set_hh_hv_channel(
+                self.deps.widgets["hh_hv_switch"].get()
+            )
 
         self.deps.widgets["contrast_slider"].set(0)  # Reset contrast slider
         self.contrast_slider_handle(0)
 
-        self.deps.app.title(f"Scene {scene.scene_name}-{display.channel_mode}")
+        self.deps.app.title(f"Scene {scene.scene_name}-{self.deps.app_state.display.channel_mode}")
         self.display_controller.choose_image()
 
         self.display_controller.refresh_all()
@@ -58,39 +61,7 @@ class ImageControlsController:
         """
         Handle contrast slider changes, apply contrast enhancement to the current image based on the selected channel(s), and refresh the display.
         """
-        scene = self.deps.app_state.scene
-        display = self.deps.app_state.display
-
-        display.contrast = (val/200) * 0.15
-
-        if display.channel_mode in ["(HH, HH, HV)", "(HH, HV, HV)"]:
-            HH_contrasted = enhance_outlier_slider(
-                img_u8=scene.orig_img["HH"], # Pass raw image for faster processing
-                hist=scene.hist["HH"],
-                n_valid=scene.n_valid["HH"],
-                s=display.contrast
-            )
-
-            HV_contrasted = enhance_outlier_slider(
-                img_u8=scene.orig_img["HV"], # Pass raw image for faster processing
-                hist=scene.hist["HV"],
-                n_valid=scene.n_valid["HV"],
-                s=display.contrast
-            )
-
-            # Re-layer the imagery with new contrast
-            scene.img = layer_imagery(
-                HH_contrasted,
-                HV_contrasted,
-                display.channel_mode
-            )
-        else:
-            scene.img = enhance_outlier_slider(
-                img_u8=scene.orig_img[display.channel_mode], # Pass raw image for faster processing
-                hist=scene.hist[display.channel_mode],
-                n_valid=scene.n_valid[display.channel_mode],
-                s=display.contrast
-            )
+        self.image_controls_viewmodel.apply_contrast(val)
 
         self.display_controller.refresh_all()
 
@@ -99,15 +70,14 @@ class ImageControlsController:
         Handle right-click on contrast slider to reset contrast to default, refresh the display.
         """
         self.deps.widgets["contrast_slider"].set(0) # reset to default
-        self.deps.app_state.display.contrast = 0.0
-        self.contrast_slider_handle(0)
+        self.image_controls_viewmodel.reset_contrast()
         self.display_controller.refresh_all()
 
     def brightness_slider_handle(self,val):
         """
         Handle brightness slider changes, update the displayed image based on the selected channel, and refresh the display.
         """
-        self.deps.app_state.display.brightness = float(val)/100
+        self.image_controls_viewmodel.set_brightness(val)
         self.display_controller.refresh_all()
 
     def right_click_brightness_reset(self, event):
@@ -115,7 +85,7 @@ class ImageControlsController:
         Handle right-click on brightness slider to reset brightness to default, refresh the display.
         """
         self.deps.widgets["brightness_slider"].set(0) # reset to default
-        self.deps.app_state.display.brightness = 0.0
+        self.image_controls_viewmodel.reset_brightness()
         self.display_controller.refresh_all()
 
     # Segmentation handle
@@ -124,7 +94,7 @@ class ImageControlsController:
         """
         Handle opacity slider changes, update the overlay opacity, and refresh the display.
         """
-        self.deps.app_state.overlay.alpha = float(val)/100
+        self.image_controls_viewmodel.set_opacity(val)
         self.display_controller.set_overlay()
         self.display_controller.display_image()
 
@@ -142,9 +112,9 @@ class ImageControlsController:
         Handle segmentation overlay toggle, update the button appearance based on the state, and refresh the display.
         When 'OFF' just show base image, when 'ON' show overlay
         """
+        show_overlay = self.image_controls_viewmodel.toggle_segmentation_overlay()
         overlay_state = self.deps.app_state.overlay
-        overlay_state.show_overlay = not overlay_state.show_overlay
-        state = "ON" if overlay_state.show_overlay else "OFF"
+        state = "ON" if show_overlay else "OFF"
         self.deps.widgets["segmentation_toggle_btn"].configure(text=state)
 
         self.display_controller.display_image()

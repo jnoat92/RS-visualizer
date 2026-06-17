@@ -1,7 +1,7 @@
 '''
 Annotation panel setup and functions
 
-Last modified: Mar 2026
+Last modified: Jun 2026
 '''
 
 from email.mime import text
@@ -15,8 +15,8 @@ from PIL import Image, ImageTk
 from tkinter import Canvas
 import numpy as np
 import cv2
-from core.utils import blend_overlay, generate_boundaries, rgb2gray
-from core.io import resource_path
+from model.utils import blend_overlay, generate_boundaries, rgb2gray
+from model.io import resource_path
 from app.state import AppState
 
 class AnnotationPanel(ctk.CTkFrame):
@@ -28,6 +28,7 @@ class AnnotationPanel(ctk.CTkFrame):
             command_parent = self
         self.command_parent = command_parent
         self.app_state = command_parent.app_state
+        self.annotation_viewmodel = command_parent.annotation_viewmodel
 
         # Drawing tools frame
         self.drawing_frame = ctk.CTkFrame(self)
@@ -284,6 +285,7 @@ class AnnotationPanel(ctk.CTkFrame):
         """Apply the selected label source to the main canvas for the selected area."""
         scene = self.app_state.scene
         anno = self.app_state.anno
+        display = self.app_state.display
         key = self.zoom_mode_var_lbl_source.get()
         if key not in scene.predictions:
             messagebox.showinfo("Error", f"Invalid label source {key}.", parent=self.zoom_window)
@@ -328,7 +330,7 @@ class AnnotationPanel(ctk.CTkFrame):
             self.unsaved_changes = True
             #self.save_button.configure(state=ctk.NORMAL)
             changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-            self.command_parent.deps.minimap.show_changed_area(scene.img, changed_area_mask)
+            self.command_parent.deps.minimap.show_changed_area(scene.color_composites[display.channel_mode], changed_area_mask)
         else:
             # Whole area reset
             if not messagebox.askyesnocancel("Reset whole annotation", "Please note you are about to reset the entire annotation.\n" \
@@ -357,57 +359,14 @@ class AnnotationPanel(ctk.CTkFrame):
          - Saves the notes in a JSON file with timestamp
          - Also saves a mask of the changed area compared to the original prediction for reference (.png)
         """
-        scene = self.app_state.scene
-        anno = self.app_state.anno
-
         notes = self.notes_text.get("1.0", "end").strip()
 
         key = "Custom_Annotation"
-        if key not in scene.predictions.keys():
-            messagebox.showerror("Error", f"There is no {key} to save.")
+        try:
+            file_path = self.annotation_viewmodel.save_annotation(notes)
+        except ValueError as e:
+            messagebox.showerror("Error", str(e))
             return False
-        
-        file_path = scene.filenames[list(scene.predictions).index(key)]
-        os.makedirs(os.path.split(file_path)[0], exist_ok=True)
-        img = scene.predictions[key].copy()
-        img[(img == [0, 255, 255]).all(axis=2)] = [0, 0, 128]
-        img[(img == [255, 130, 0]).all(axis=2)] = [128, 0, 0]
-        Image.fromarray(img).save(file_path)
-
-        new_note = {
-            scene.scene_name: {
-                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "notes": notes
-            }
-        }
-        
-        notes_file_folder = os.path.split(os.path.split(file_path)[0])[0]
-        notes_file_path = os.path.join(notes_file_folder, "annotation_notes.json")
-
-        if os.path.exists(notes_file_path):
-            with open(notes_file_path, 'r') as f:
-                try:
-                    existing_notes = json.load(f)
-                except json.JSONDecodeError:
-                    existing_notes = {}
-        else:
-            existing_notes = {}
-        
-        if scene.scene_name in existing_notes:
-            existing_notes[scene.scene_name] = new_note[scene.scene_name]
-        else:
-            existing_notes.update(new_note)
-            
-        with open(notes_file_path, 'w') as f:
-            json.dump(existing_notes, f, indent=4)
-
-        anno.annotation_notes = notes
-
-        annotated_area_file_folder = os.path.split(file_path)[0]
-        changed_area_mask = scene.predictions[scene.active_source][:,:,0] != scene.predictions[scene.lbl_sources[0]][:,:,0]
-        annotated_area_file_path = os.path.join(annotated_area_file_folder, "changed_area.png")
-        # Save the changed area mask as an single channel image
-        Image.fromarray(changed_area_mask).save(annotated_area_file_path)
 
         # mark as saved
         self.command_parent.deps.widgets["lbl_source_btn"][key].configure(text=key)

@@ -1,7 +1,7 @@
 """
 Utility functions for image processing and visualization.
 
-Last modified: Apr 2026
+Last modified: Jun 2026
 """
 
 from numba import njit, prange, cuda

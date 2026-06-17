@@ -3,10 +3,10 @@ ArcticScope
 Remote Sensing Visualizer
 Main application entry point
 
-Last modified: Feb 2026
+Last modified: Jun 2026
 '''
 
-from app.visualizer import Visualizer
+from view.visualizer import Visualizer
 import multiprocessing
 
 def main():

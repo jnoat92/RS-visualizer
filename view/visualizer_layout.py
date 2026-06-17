@@ -1,11 +1,20 @@
+'''
+Defines the VisualizerLayout dataclass and the build_visualizer_layout function 
+to construct the GUI layout of the application.
+
+Last modified: Jun 2026
+'''
+
 from dataclasses import dataclass
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import Canvas
+from PIL import Image
 
-from ui.evaluation import EvaluationPanel
-from ui.annotation import AnnotationPanel
-from ui.minimap import Minimap
+from model.io import resource_path
+from view.evaluation_panel import EvaluationPanel
+from view.annotation_panel import AnnotationPanel
+from view.minimap import Minimap
 
 @dataclass
 class VisualizerLayout:
@@ -79,6 +88,17 @@ def build_visualizer_layout(app, app_state) -> VisualizerLayout:
                                         sticky="w", padx=5, pady=5)
     widgets['choose_SAR_scene_toggle_btn'] = choose_SAR_scene_toggle_btn
     
+    # Settings button
+    settings_btn = ctk.CTkButton(
+        select_image_frame,
+        text="",
+        image=ctk.CTkImage(Image.open(resource_path("icons/settings.png")), size=(20, 20)),
+        width=20,
+        command=None  # Will set command later after SetupWindow is created
+    )
+    settings_btn.grid(row=0, column=1, sticky="e", padx=5, pady=5)
+    widgets['settings_btn'] = settings_btn
+
     # Color composite selection
     mode_var_color_composite = ctk.StringVar(value=app_state.display.channel_mode)  # Default selection
     HH_HV = ctk.CTkRadioButton(select_image_frame,
