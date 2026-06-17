@@ -4,14 +4,14 @@ clicks, double-clicks, and movements. It interacts with the display,
 zoom, annotation, and panel controllers to perform actions based on 
 user input.
 
-Last modified: Apr 2026
+Last modified: Jun 2026
 '''
 
 import numpy as np
 from rasterio.transform import xy
 from tkinter import messagebox
-from core.segmentation import get_segment_contours
-from core.utils import ds_to_src_pixel, decimal_to_dms
+from model.segmentation import get_segment_contours
+from model.utils import ds_to_src_pixel, decimal_to_dms
 
 
 class CanvasEventsController:

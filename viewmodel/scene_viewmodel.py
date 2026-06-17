@@ -112,7 +112,7 @@ class SceneViewModel:
 
         if scene.model_path is None or not os.path.isfile(scene.model_path):
             model_paths = []
-            model_folder = resource_path("model")
+            model_folder = resource_path("model\prediction_model")
 
             for file in os.listdir(model_folder):
                 if file.endswith((".h5", ".pt", ".pth")):

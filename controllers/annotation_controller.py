@@ -5,14 +5,14 @@ polygon drawing, rectangle drawing, bucket fill, and label assignment.
 It also manages the iteractions with local segmentation and 
 undo/redo functionality.
 
-Last modified: Apr 2026
+Last modified: Jun 2026
 '''
 
 import numpy as np
 import cv2
 import customtkinter as ctk
 from tkinter import messagebox
-from core.render import layer_imagery
+from model.render import layer_imagery
 
 
 class AnnotationController:
