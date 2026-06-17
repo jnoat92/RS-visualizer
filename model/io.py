@@ -27,12 +27,20 @@ from shapely.geometry import box, Polygon
 from shapely.ops import unary_union
 from datetime import datetime
 import copy
+import argparse
 
 from pyproj import Transformer
 import matplotlib.pyplot as plt
 import torch
 from scipy.interpolate import griddata
-from model.prediction_model.model_helper import Normalize_min_max, load_model, forward_model_committee
+from model.prediction_model.model_helper import (
+    Normalize_min_max, 
+    Normalize_mean_std,
+    forward_model_committee, 
+    load_model,
+    inference,
+    get_input_divisor
+)
 
 from model.utils import rgb2gray, generate_boundaries
 from model.parallel_handler import Parallel
@@ -769,6 +777,33 @@ def run_pred_model(lbl_source, img, land_mask, model_path, target_width, target_
 
     land_nan_mask = (~valid_mask) | land_mask
     boundmask = generate_boundaries(rgb2gray(colored_pred_map))
+
+    return [(lbl_source, colored_pred_map, land_nan_mask, boundmask)]
+
+def run_pred_model(lbl_source, img, land_mask, model_path, target_width, target_height, 
+                   target_spacing, model_spacing_m = 200, device="cpu"):
+    parser = argparse.ArgumentParser(description="Load and verify an mmsegmentation checkpoint")
+    parser.add_argument("--config", default="D:/Temp/Model_update_code/sea-ice-mmseg/configs/arcticscope/unet_1xb8-amp-coslr-30ki_rcm.py", type=str, help="Path to the mmseg config .py file")
+    parser.add_argument("--checkpoint", default="D:/Temp/Model_update_code/sea-ice-mmseg/work_dirs/unet_1xb8-amp-coslr-30ki_rcm/best_mFscore_iter_3500.pth", type=str, help="Path to the .pth checkpoint file")
+    parser.add_argument("--device", type=str, default="cpu", help="Device to load model on (default: cpu)")
+    args = parser.parse_args()
+
+    print(f"Config:     {args.config}")
+    print(f"Checkpoint: {args.checkpoint}")
+    print(f"Device:     {args.device}")
+
+    img = np.random.rand(500, 500, 2).astype(np.float32)
+    img = Normalize_mean_std(img)
+
+    model = load_model(args.config, args.checkpoint, device=args.device)
+    device = next(model.parameters()).device
+    print(f"Model loaded: {type(model).__name__}  |  Parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+    print(f"Input divisor:  {get_input_divisor(model)}")
+    print("Running inference on 500x500x2 toy image...")
+    seg_map = inference(model, img, device)
+    print(f"Output shape:   {seg_map.shape}")
+    print(f"Unique classes: {np.unique(seg_map)}")
 
     return [(lbl_source, colored_pred_map, land_nan_mask, boundmask)]
 
