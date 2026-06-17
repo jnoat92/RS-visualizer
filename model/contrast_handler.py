@@ -1,7 +1,7 @@
 """
 Contrast enhancement utilities for uint8 images using histogram-based quantiles and LUTs.
 
-Last modified: Mar 2026
+Last modified: Jun 2026
 """
 
 import numpy as np

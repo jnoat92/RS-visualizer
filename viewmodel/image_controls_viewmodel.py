@@ -1,5 +1,12 @@
-from core.contrast_handler import enhance_outlier_slider
-from core.render import layer_imagery
+'''
+ImageControlsViewModel controls the state of the image controls and the 
+derived image arrays that are displayed in the UI.
+
+Last modified: Jun 2026
+'''
+
+from model.contrast_handler import enhance_outlier_slider
+from model.render import layer_imagery
 
 
 class ImageControlsViewModel:

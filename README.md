@@ -203,9 +203,7 @@ The generated executable will be placed in:
 
 ```
 ├───app
-│   ├───dependencies.py
-│   ├───state.py
-│   └───visualizer.py
+│   └───state.py
 ├───controllers
 │   ├───annotation_controller.py
 │   ├───canvas_events_controller.py
@@ -214,37 +212,49 @@ The generated executable will be placed in:
 │   ├───local_seg_controller.py
 │   ├───scene_controller.py
 │   └───zoom_controller.py
-├───core
+├───model
+│   ├───prediction_model
+│   │   ├───DL
+│   │   │   └───unet
+│   │   │       ├───__init__.py
+│   │   │       ├───unet_model.py
+│   │   │       └───unet_parts.py
+│   │   ├───model_helper.py
+│   │   └───Unet_model.pt (subject to change based on model)
 │   ├───contrast_handler.py
 │   ├───io.py
 │   ├───overlay.py
 │   ├───parallel_handler.py
 │   ├───render.py
+│   ├───scene_manager.py
 │   ├───segmentation.py
 │   └───utils.py
 ├───icons
 │   ├───polygon.png
 │   ├───rectangle.png
 │   ├───redo.png
+│   ├───settings.png
 │   └───undo.png
 ├───landmask
 │   ├───StatCan_ocean.dbf
 │   ├───StatCan_ocean.prj
 │   ├───StatCan_ocean.shp
 │   └───StatCan_ocean.shx
-├───model
-│   ├───DL
-│   │   └───unet
-│   │       ├───__init__.py
-│   │       ├───unet_model.py
-│   │       └───unet_parts.py
-│   ├───model_helper.py
-│   └───Unet_model_12_.pt
-├───ui
-│   ├───annotation.py
-│   ├───evaluation.py
+├───view
+│   ├───annotation_panel.py
+│   ├───app_dependencies.py
+│   ├───evaluation_panel.py
 │   ├───minimap.py
-│   └───visualizer_layout.py
+│   ├───setup_window.py
+│   ├───visualizer_layout.py
+│   └───visualizer.py
+├───viewmodel
+│   ├───__init__.py
+│   ├───annotation_viewmodel.py
+│   ├───display_viewmodel.py
+│   ├───image_controls_viewmodel.py
+│   ├───local_segmentation_viewmodel.py
+│   └───scene_viewmodel.py
 ├───ArcticScope_User_Manual.pdf
 ├───create_executable.bat
 ├───main.py
@@ -267,4 +277,4 @@ Application Feels Slow
 - Zoom in on a smaller area
 - Close other applications if system memory is limited.
 
-Last modified: Apr 8, 2026
+Last modified: Jun 17, 2026

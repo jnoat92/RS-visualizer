@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 from skimage.color import rgb2gray
 
-from core.utils import generate_boundaries
+from model.utils import generate_boundaries
 
 
 class AnnotationViewModel:

@@ -1,7 +1,7 @@
 '''
 Annotation panel setup and functions
 
-Last modified: Mar 2026
+Last modified: Jun 2026
 '''
 
 from email.mime import text
@@ -15,8 +15,8 @@ from PIL import Image, ImageTk
 from tkinter import Canvas
 import numpy as np
 import cv2
-from core.utils import blend_overlay, generate_boundaries, rgb2gray
-from core.io import resource_path
+from model.utils import blend_overlay, generate_boundaries, rgb2gray
+from model.io import resource_path
 from app.state import AppState
 
 class AnnotationPanel(ctk.CTkFrame):

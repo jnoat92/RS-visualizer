@@ -1,7 +1,14 @@
+'''
+DisplayViewModel is responsible for preparing images for display, 
+including cropping, resizing, and compositing overlays.
+
+Last modified: Jun 2026
+'''
+
 from dataclasses import dataclass
 
-from core.overlay import compose_overlay
-from core.render import crop_resize
+from model.overlay import compose_overlay
+from model.render import crop_resize
 
 
 @dataclass

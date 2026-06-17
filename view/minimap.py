@@ -1,7 +1,7 @@
 '''
 Minimap panel setup and functions
 
-Last modified: Mar 2026
+Last modified: Jun 2026
 '''
 
 import tkinter as tk

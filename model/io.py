@@ -2,7 +2,7 @@
 Image input/output related functions
 Handles loading of images and predictions and path to external resources
 
-Last modified: Mar 2026
+Last modified: Jun 2026
 '''
 
 from PIL import Image
@@ -32,11 +32,11 @@ from pyproj import Transformer
 import matplotlib.pyplot as plt
 import torch
 from scipy.interpolate import griddata
-from model.model_helper import Normalize_min_max, load_model, forward_model_committee
+from model.prediction_model.model_helper import Normalize_min_max, load_model, forward_model_committee
 
-from core.utils import rgb2gray, generate_boundaries
-from core.parallel_handler import Parallel
-from core.contrast_handler import precompute_valid_hist_u8
+from model.utils import rgb2gray, generate_boundaries
+from model.parallel_handler import Parallel
+from model.contrast_handler import precompute_valid_hist_u8
 
 def PredictionLoader(iterator, resize=False, img_shape=None):
     key, filename = iterator

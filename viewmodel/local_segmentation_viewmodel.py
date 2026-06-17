@@ -1,6 +1,12 @@
+'''
+LocalSegmentationViewModel: Handles local segmentation logic and state management.
+
+Last modified: Jun 2026
+'''
+
 import numpy as np
 
-from core.segmentation import IRGS, remove_edge_touching_polygons
+from model.segmentation import IRGS, remove_edge_touching_polygons
 
 
 class LocalSegmentationViewModel:

@@ -7,6 +7,8 @@ the image source (in their local directory) and choosing the resolution
 level for display. It also provides options for selecting the 
 normalization method to apply to the image (mean-std, min-max).
 Users can also choose which model to use for predictions.
+
+Last modified: Jun 2026
 """
 
 import tkinter as tk

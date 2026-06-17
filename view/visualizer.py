@@ -3,7 +3,7 @@ Visualizer module for Remote Sensing Visualizer application
 
 Contains the Visualizer class which manages the GUI and image processing.
 
-Last modified: Apr 2026
+Last modified: Jun 2026
 '''
 import customtkinter as ctk
 import tkinter as tk
@@ -11,9 +11,9 @@ from tkinter import Canvas, filedialog, messagebox
 import numpy as np
 
 from app.state import AppState
-from app.dependencies import AppDeps
-from ui.visualizer_layout import build_visualizer_layout
-from ui.setup_window import SetupWindow
+from view.app_dependencies import AppDeps
+from view.visualizer_layout import build_visualizer_layout
+from view.setup_window import SetupWindow
 from controllers.scene_controller import SceneController
 from controllers.display_controller import DisplayController
 from controllers.image_controls_controller import ImageControlsController
@@ -21,11 +21,11 @@ from controllers.annotation_controller import AnnotationController
 from controllers.canvas_events_controller import CanvasEventsController
 from controllers.zoom_controller import ZoomController
 from controllers.local_seg_controller import LocalSegController
-from viewmodels.annotation_viewmodel import AnnotationViewModel
-from viewmodels.display_viewmodel import DisplayViewModel
-from viewmodels.image_controls_viewmodel import ImageControlsViewModel
-from viewmodels.local_segmentation_viewmodel import LocalSegmentationViewModel
-from viewmodels.scene_viewmodel import SceneViewModel
+from viewmodel.annotation_viewmodel import AnnotationViewModel
+from viewmodel.display_viewmodel import DisplayViewModel
+from viewmodel.image_controls_viewmodel import ImageControlsViewModel
+from viewmodel.local_segmentation_viewmodel import LocalSegmentationViewModel
+from viewmodel.scene_viewmodel import SceneViewModel
 
 class Visualizer(ctk.CTk):
 

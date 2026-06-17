@@ -1,7 +1,7 @@
 '''
 Segmentation related functions
 
-Last modified: Mar 2026
+Last modified: Jun 2026
 '''
 
 import numpy as np
@@ -9,7 +9,7 @@ from shapely import polygons
 from skimage.measure import find_contours, label
 from magic_py.magic_rag import magic_rag
 
-from core.utils import erase_edge_touching_polygons_numba
+from model.utils import erase_edge_touching_polygons_numba
 
 def get_segment_contours(pred, x, y):
     """Get contours for a specific segment in the prediction image."""

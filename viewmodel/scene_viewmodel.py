@@ -1,6 +1,13 @@
+'''
+SceneViewModel handles loading SAR scenes, land masks, prepared display imagery, 
+and predictions for the application.
+
+Last modified: Jun 2026
+'''
+
 import os
 
-from core.io import (
+from model.io import (
     load_existing_annotation,
     load_rcm_product,
     run_pred_model,
@@ -9,8 +16,8 @@ from core.io import (
     normalize_and_prepare_images,
     resource_path,
 )
-from core.render import layer_imagery
-from core.utils import tiepoints_1d_to_grid, make_pix2ll
+from model.render import layer_imagery
+from model.utils import tiepoints_1d_to_grid, make_pix2ll
 
 
 class SceneViewModel:

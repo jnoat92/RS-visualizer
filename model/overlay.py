@@ -1,11 +1,11 @@
 '''
 Overlay related functions
 
-Last modified: Mar 2026
+Last modified: Jun 2026
 '''
 
 import numpy as np
-from core.utils import blend_overlay_cuda, blend_overlay
+from model.utils import blend_overlay_cuda, blend_overlay
 from numba import cuda
 
 # Display handle

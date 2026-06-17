@@ -1,13 +1,20 @@
+'''
+Defines the VisualizerLayout dataclass and the build_visualizer_layout function 
+to construct the GUI layout of the application.
+
+Last modified: Jun 2026
+'''
+
 from dataclasses import dataclass
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import Canvas
 from PIL import Image
 
-from core.io import resource_path
-from ui.evaluation import EvaluationPanel
-from ui.annotation import AnnotationPanel
-from ui.minimap import Minimap
+from model.io import resource_path
+from view.evaluation_panel import EvaluationPanel
+from view.annotation_panel import AnnotationPanel
+from view.minimap import Minimap
 
 @dataclass
 class VisualizerLayout:

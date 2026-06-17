@@ -1,7 +1,7 @@
 '''
 Rendering functions to handle image display after zooming and panning
 
-Last modified: Mar 2026
+Last modified: Jun 2026
 '''
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,8 +9,8 @@ from rasterio.windows import Window
 from rasterio.enums import Resampling
 from skimage.morphology import binary_dilation
 import cv2
-from core.utils import apply_brightness
-from core.contrast_handler import enhance_outlier_slider
+from model.utils import apply_brightness
+from model.contrast_handler import enhance_outlier_slider
 
 # TO DO: Optimize as it is the bottleneck for performance when changing contrast/brightness and during panning/zooming
 def crop_resize(pred, img, boundmask, landmask, 

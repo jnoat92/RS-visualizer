@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-from core.io import load_images, load_prediction
+from model.io import load_images, load_prediction
 
 class SceneManager:
     def load_folder(self, app_state, folder_path):
