@@ -781,29 +781,49 @@ def run_pred_model(lbl_source, img, land_mask, model_path, target_width, target_
     return [(lbl_source, colored_pred_map, land_nan_mask, boundmask)]
 
 def run_pred_model(lbl_source, img, land_mask, model_path, target_width, target_height, 
-                   target_spacing, model_spacing_m = 200, device="cpu"):
+                   target_spacing, model_spacing_m = 200, 
+                   class_colors=np.uint8([[0, 255, 255], [255, 130, 0]]), device="cpu"):
     parser = argparse.ArgumentParser(description="Load and verify an mmsegmentation checkpoint")
-    parser.add_argument("--config", default="D:/Temp/Model_update_code/sea-ice-mmseg/configs/arcticscope/unet_1xb8-amp-coslr-30ki_rcm.py", type=str, help="Path to the mmseg config .py file")
-    parser.add_argument("--checkpoint", default="D:/Temp/Model_update_code/sea-ice-mmseg/work_dirs/unet_1xb8-amp-coslr-30ki_rcm/best_mFscore_iter_3500.pth", type=str, help="Path to the .pth checkpoint file")
+    parser.add_argument("--config", default=resource_path("sea-ice-mmseg\\configs\\arcticscope\\unet_1xb8-coslr-30ki_rcm.py"), type=str, help="Path to the mmseg config .py file")
+    parser.add_argument("--checkpoint", default=resource_path("model\\prediction_model\\best_mFscore_iter_3500.pth"), type=str, help="Path to the .pth checkpoint file")
     parser.add_argument("--device", type=str, default="cpu", help="Device to load model on (default: cpu)")
     args = parser.parse_args()
 
-    print(f"Config:     {args.config}")
-    print(f"Checkpoint: {args.checkpoint}")
-    print(f"Device:     {args.device}")
+    # print(f"Config:     {args.config}")
+    # print(f"Checkpoint: {args.checkpoint}")
+    # print(f"Device:     {args.device}")
 
-    img = np.random.rand(500, 500, 2).astype(np.float32)
-    img = Normalize_mean_std(img)
+    hh = img["hh"]
+    hv = img["hv"]
+    valid_mask = np.isfinite(hh) & np.isfinite(hv)
+
+    img = Normalize_mean_std(np.stack([hh, hv], axis=-1))
 
     model = load_model(args.config, args.checkpoint, device=args.device)
     device = next(model.parameters()).device
-    print(f"Model loaded: {type(model).__name__}  |  Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    # print(f"Model loaded: {type(model).__name__}  |  Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    print(f"Input divisor:  {get_input_divisor(model)}")
-    print("Running inference on 500x500x2 toy image...")
+    # print(f"Input divisor:  {get_input_divisor(model)}")
     seg_map = inference(model, img, device)
-    print(f"Output shape:   {seg_map.shape}")
-    print(f"Unique classes: {np.unique(seg_map)}")
+    # print(f"Output shape:   {seg_map.shape}")
+    # print(f"Unique classes: {np.unique(seg_map)}")
+
+    colored_pred_map = class_colors[seg_map]  # (H, W, 3)
+    
+    if valid_mask is not None:
+        colored_pred_map[~valid_mask] = 255  # Set no-data pixels to white (255, 255, 255)
+
+    # Scale colored_pred_map back to original image size if needed (e.g., if model runs on 200m but original is 100m)
+    if target_spacing != model_spacing_m:
+        new_size = (target_width, target_height)
+        colored_pred_map = cv2.resize(colored_pred_map, new_size, interpolation=cv2.INTER_NEAREST)
+        valid_mask = cv2.resize(valid_mask.astype(np.uint8), new_size, interpolation=cv2.INTER_NEAREST).astype(bool)
+
+    colored_pred_map[land_mask] = [255, 255, 255]
+    colored_pred_map[~valid_mask] = [255, 255, 255]
+
+    land_nan_mask = (~valid_mask) | land_mask
+    boundmask = generate_boundaries(rgb2gray(colored_pred_map))
 
     return [(lbl_source, colored_pred_map, land_nan_mask, boundmask)]
 
