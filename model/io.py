@@ -749,36 +749,36 @@ def normalize_and_prepare_images(rcm_200m_data, normalization_method="min-max"):
     return raw_img, img_base, hist, n_valid, nan_mask, geo_coord_helpers
 
 
-def run_pred_model(lbl_source, img, land_mask, model_path, target_width, target_height, 
-                   target_spacing, model_spacing_m = 200, device="cpu"):
-    hh = img["hh"]
-    hv = img["hv"]
-    valid_mask = np.isfinite(hh) & np.isfinite(hv)
+# def run_pred_model(lbl_source, img, land_mask, model_path, target_width, target_height, 
+#                    target_spacing, model_spacing_m = 200, device="cpu"):
+#     hh = img["hh"]
+#     hv = img["hv"]
+#     valid_mask = np.isfinite(hh) & np.isfinite(hv)
 
-    img_norm = Normalize_min_max(np.stack([hh, hv], axis=-1), valid_mask=valid_mask)
+#     img_norm = Normalize_min_max(np.stack([hh, hv], axis=-1), valid_mask=valid_mask)
 
-    img_norm_t = torch.from_numpy(img_norm[None]).permute(0, 3, 1, 2).to(device).float()
+#     img_norm_t = torch.from_numpy(img_norm[None]).permute(0, 3, 1, 2).to(device).float()
 
-    colored_pred_map = forward_model_committee(
-        model_path,
-        img_norm_t,
-        valid_mask=valid_mask,
-        device=device,
-    )
+#     colored_pred_map = forward_model_committee(
+#         model_path,
+#         img_norm_t,
+#         valid_mask=valid_mask,
+#         device=device,
+#     )
 
-    # Scale colored_pred_map back to original image size if needed (e.g., if model runs on 200m but original is 100m)
-    if target_spacing != model_spacing_m:
-        new_size = (target_width, target_height)
-        colored_pred_map = cv2.resize(colored_pred_map, new_size, interpolation=cv2.INTER_NEAREST)
-        valid_mask = cv2.resize(valid_mask.astype(np.uint8), new_size, interpolation=cv2.INTER_NEAREST).astype(bool)
+#     # Scale colored_pred_map back to original image size if needed (e.g., if model runs on 200m but original is 100m)
+#     if target_spacing != model_spacing_m:
+#         new_size = (target_width, target_height)
+#         colored_pred_map = cv2.resize(colored_pred_map, new_size, interpolation=cv2.INTER_NEAREST)
+#         valid_mask = cv2.resize(valid_mask.astype(np.uint8), new_size, interpolation=cv2.INTER_NEAREST).astype(bool)
 
-    colored_pred_map[land_mask] = [255, 255, 255]
-    colored_pred_map[~valid_mask] = [255, 255, 255]
+#     colored_pred_map[land_mask] = [255, 255, 255]
+#     colored_pred_map[~valid_mask] = [255, 255, 255]
 
-    land_nan_mask = (~valid_mask) | land_mask
-    boundmask = generate_boundaries(rgb2gray(colored_pred_map))
+#     land_nan_mask = (~valid_mask) | land_mask
+#     boundmask = generate_boundaries(rgb2gray(colored_pred_map))
 
-    return [(lbl_source, colored_pred_map, land_nan_mask, boundmask)]
+#     return [(lbl_source, colored_pred_map, land_nan_mask, boundmask)]
 
 def run_pred_model(lbl_source, img, land_mask, model_path, target_width, target_height, 
                    target_spacing, model_spacing_m = 200, 
