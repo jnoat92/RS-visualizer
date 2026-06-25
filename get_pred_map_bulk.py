@@ -11,7 +11,7 @@ from model.io import (
 )
 
 # Cycle through all scenes in a folder and generate predictions for each scene
-def get_pred_map_bulk(folder_path, model_path, progress=None):
+def get_pred_map_bulk(folder_path, model_path, stack = "(HH, HV, HV)"):
     scene_folders = [
         os.path.join(folder_path, d)
         for d in os.listdir(folder_path)
@@ -27,6 +27,9 @@ def get_pred_map_bulk(folder_path, model_path, progress=None):
 
     model_pred_save_path = os.path.join(pred_save_path, os.path.split(model_path)[-1])
     os.makedirs(model_pred_save_path, exist_ok=True)
+
+    image_save_path = os.path.join(pred_save_path, "images")
+    os.makedirs(image_save_path, exist_ok=True)
 
     for i, scene_folder in enumerate(scene_folders):
         print(f"{i} / {len(scene_folders)} - Processing scene {i + 1}/{len(scene_folders)}: {scene_folder}")
@@ -48,6 +51,14 @@ def get_pred_map_bulk(folder_path, model_path, progress=None):
         raw_img, orig_img, hist, n_valid, nan_mask, geo_coord_helpers = (
             normalize_and_prepare_images(rcm_200m_data, "mean-std")
         )
+
+        HH_img = raw_img["HH"]
+        HV_img = raw_img["HV"]
+
+        if stack == "(HH, HV, HV)":
+            color_composite_img = np.stack([HH_img, HV_img, HV_img], axis=-1)
+        else:
+            color_composite_img = np.stack([HH_img, HH_img, HV_img], axis=-1)
 
         prediction_vars = run_pred_model(
             "Model",
@@ -72,12 +83,25 @@ def get_pred_map_bulk(folder_path, model_path, progress=None):
 
         # Save the prediction map as a PNG file
         pred_filename = os.path.join(model_pred_save_path, f"{os.path.split(scene_folder)[-1]}_pred.png")
+        # If file already exists, append a number to the filename to avoid overwriting
+        if os.path.exists(pred_filename):
+            base, ext = os.path.splitext(pred_filename)
+            counter = 1
+            while os.path.exists(f"{base}_{counter}{ext}"):
+                counter += 1
+            pred_filename = f"{base}_{counter}{ext}"
         plt.imsave(pred_filename, pred, cmap="viridis")
+
+        # Also save the original image as color composite as PNG files for reference
+        orig_img_filename = os.path.join(image_save_path, f"{os.path.split(scene_folder)[-1]}_orig.png")
+        # If file already exists, don't do anything, just skip saving the original image
+        if not os.path.exists(orig_img_filename):
+            plt.imsave(orig_img_filename, color_composite_img, cmap="viridis")
 
 def main():
     folder_path = input("Enter the path to the folder containing RCM scenes: ")
     model_path = "model\\prediction_model\\best_mFscore_iter_3500.pth"  # Replace with the path
-    get_pred_map_bulk(folder_path, model_path)
+    get_pred_map_bulk(folder_path, model_path, stack="(HH, HV, HV)")
 
 if __name__ == "__main__":
     main()
