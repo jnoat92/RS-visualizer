@@ -1,3 +1,11 @@
+'''
+This script processes a folder of RCM scenes, generates predictions for 
+each scene using a specified model, and saves the prediction maps and 
+original images as PNG files.
+
+Last modified: Jun 2026
+'''
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt
