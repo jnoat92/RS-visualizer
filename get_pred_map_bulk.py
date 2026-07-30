@@ -3,7 +3,7 @@ This script processes a folder of RCM scenes, generates predictions for
 each scene using a specified model, and saves the prediction maps and 
 original images as PNG files.
 
-Last modified: Jun 2026
+Last modified: July 2026
 '''
 
 import os
@@ -19,7 +19,7 @@ from model.io import (
 )
 
 # Cycle through all scenes in a folder and generate predictions for each scene
-def get_pred_map_bulk(folder_path, model_path, stack = "(HH, HV, HV)"):
+def get_pred_map_bulk(folder_path, save_path, model_path, stack = "(HH, HV, HV)"):
     scene_folders = [
         os.path.join(folder_path, d)
         for d in os.listdir(folder_path)
@@ -30,7 +30,7 @@ def get_pred_map_bulk(folder_path, model_path, stack = "(HH, HV, HV)"):
     scene_folders = [d for d in scene_folders if os.path.basename(d) != "predictions"]
 
     # Save predictions to a folder as png files
-    pred_save_path = os.path.join(folder_path, "predictions")
+    pred_save_path = os.path.join(save_path, "predictions")
     os.makedirs(pred_save_path, exist_ok=True)
 
     model_pred_save_path = os.path.join(pred_save_path, os.path.split(model_path)[-1])
@@ -108,8 +108,9 @@ def get_pred_map_bulk(folder_path, model_path, stack = "(HH, HV, HV)"):
 
 def main():
     folder_path = input("Enter the path to the folder containing RCM scenes: ")
+    save_path = input("Enter the path to save the prediction maps and images: ")
     model_path = "model\\prediction_model\\best_mFscore_iter_3500.pth"  # Replace with the path
-    get_pred_map_bulk(folder_path, model_path, stack="(HH, HV, HV)")
+    get_pred_map_bulk(folder_path, save_path, model_path, stack="(HH, HH, HV)")
 
 if __name__ == "__main__":
     main()
